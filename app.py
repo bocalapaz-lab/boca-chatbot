@@ -204,7 +204,7 @@ def enviar_payload(data):
     data = json.dumps(data)
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer EAAVEa8dSzTcBRzyZBL0FxlAPZAdONhkU7Ptorrk2iGs2OTadgWZAjv5zzJyMQmZBVVoihKZBBXEZCRNYJObw43lDluDwVW7QBCsfWlzYnDZC1yYBfIe52GAUU0yqNDsIbd8uYg3vu0LhPFbhNyTPTnZCoTr1BigcmaAtkSKn7fuU7yUNWOglnK54fQJFdy1ZCKSSLX5RYSUGIEfGlM2Jee2er6R5GMTHxp6f4brmR7rJ8p0EiXZAh0UZAbBgp3VZCoQ2PteBdJUa3CoiZAeZAQmL05zcneXwipWGDgRyuHMRZC28gZDZD"
+        "Authorization": "Bearer EAAVEa8dSzTcBRxlGqTF6SSmnmdsVjLN27hxTOGnSVYwnzQWjRUNUSABSVZBjldBhmXXEpronaPZBkqZB2yPar69DZBRpZBag2tGGcWp0mChLtpE9xV6VdQkiqTyUsYMAHXywP5NsZBVZA8S6w0vnh2FbNgYLTFwgmYe1ddHoz6esFpqBZAE77JyS0zQZBL8JxucsHIhmR8JLcUXawQ5O8Inp2fIZAMcZAFfPZAVqSI0sn2ZCPFWdXj5zHVqe2Qg36el05IxcC6ACgAanYhCap01EHKzOZBUTQ3ufJUfsSvLktrB2UZD"
     }
     connection = http.client.HTTPSConnection("graph.facebook.com")
     try:
