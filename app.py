@@ -4,6 +4,7 @@ from datetime import datetime
 import http.client
 import json
 import time
+import os
 
 app = Flask(__name__)
 
@@ -98,9 +99,6 @@ def recibir_mensajes(req):
             estado = obtener_estado(numero_normalizado)
 
             if estado == "atencion_humana":
-                # Ya esta en manos de una persona. El bot NO responde
-                # automaticamente -- el mensaje solo queda registrado para
-                # que lo veas y respondas tu mismo desde el panel.
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
             if tipo == "interactive":
@@ -144,7 +142,6 @@ def recibir_mensajes(req):
         agregar_mensajes_log(f"Error: {str(e)}")
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-# Ruta nueva: aqui llega cuando TU escribes una respuesta desde el panel web
 @app.route('/responder', methods=['POST'])
 def responder():
     numero = request.form.get('numero')
@@ -166,7 +163,6 @@ def responder():
 
     return redirect('/')
 
-# Ruta nueva: aqui llega cuando le das clic a "Finalizar conversacion"
 @app.route('/finalizar', methods=['POST'])
 def finalizar():
     numero = request.form.get('numero')
@@ -204,7 +200,7 @@ def enviar_payload(data):
     data = json.dumps(data)
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer EAAVEa8dSzTcBR7ghvJVVyfruAgjHeZA5KluwhWXoc2chx1zOkLQKQAI3bIh72l1pgKVMZAnBnyaCPC1q9wZCDijGV2SBbZCn3lCravEqRLlTqxQaq4X0UEPe2xe0rosdQ18ZCUzqng1Fl5IhvHV6H5XVBNnT7mQKnTURcM2MZC5slXfgtmLihzfuWEKVR2UUfqejf9ppw6X1G2BEfRe2kLxfJhRu1ODTLXnzBZBVc3IJqDKPbWP9ZADk2egZC98WObFlXhotnBLFAiDN6c5oOOVRyosceMiDFdeEWL06XPwZDZD"
+        "Authorization": f"Bearer {os.environ.get('WHATSAPP_TOKEN')}"
     }
     connection = http.client.HTTPSConnection("graph.facebook.com")
     try:
@@ -363,7 +359,7 @@ def enviar_ubicacion(number):
             "preview_url": False,
             "body": (
                 "📍 *Nuestra ubicación*\n\n"
-                "Av. Rosendo Márquez 16, 50 Doctors Torres Médicas V\n"
+                "Av. Rosendo Márquez 16, 50 Doctors Médicas V\n"
                 "La Paz, 72160 Heroica Puebla de Zaragoza, Pue.\n\n"
                 "¡Te esperamos! 😊\n\n"
                 "➡️ Escribe *0* para volver al menú principal, o escribe "
@@ -434,7 +430,7 @@ def enviar_horario(number):
                 "personalizada* (6️⃣) podría no tener respuesta inmediata, "
                 "ya que nuestro equipo no estará disponible para contestar "
                 "en ese momento.\n\n"
-                "Si es necesario, puedes intentar comunicarte directamente"
+                "Si es necesario, puedes intentar comunicarte directamente "
                 "al teléfono del consultorio.\n\n"
                 "➡️ Escribe *0* para volver al menú principal, o escribe "
                 "directamente el número de otra opción que te interese. 😊"
