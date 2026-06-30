@@ -225,7 +225,7 @@ def enviar_bienvenida(number):
         "to": number,
         "type": "image",
         "image": {
-            "link": "https://github.com/bocalapaz-lab/chatbot/blob/main/logo%20boca_page-0001.jpg?raw=true"
+            "link": "https://github.com/bocalapaz-lab/boca-assets/blob/main/logo%20boca_page-0001.jpg?raw=true"
         }
     }
     enviar_payload(data_imagen)
