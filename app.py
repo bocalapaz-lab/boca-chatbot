@@ -9,7 +9,18 @@ import pytz
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///metapython.db'
+# ─── Configuración de base de datos con disco persistente ───────────────────
+# Si existe el disco persistente montado en /var/data (Render Starter+),
+# la base de datos se guarda ahí y sobrevive a redeploys y reinicios.
+# Si esa carpeta no existe (ej. corriendo en tu compu local), usa la ruta
+# normal como antes, para que puedas seguir probando sin problemas.
+DISK_PATH = '/var/data'
+if os.path.isdir(DISK_PATH):
+    DB_PATH = os.path.join(DISK_PATH, 'metapython.db')
+else:
+    DB_PATH = 'metapython.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
