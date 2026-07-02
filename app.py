@@ -5,6 +5,7 @@ import http.client
 import json
 import time
 import os
+import pytz
 
 app = Flask(__name__)
 
@@ -87,6 +88,7 @@ def obtener_cita_activa(numero):
     ).first()
 
 TOKEN_CESAR = "cesar"
+CLAVE_RECORDATORIOS = "boca2026xK9mP3qL7nR2vT8wJ4cF6yH1"
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -123,7 +125,6 @@ def recibir_mensajes(req):
             if estado == "atencion_humana":
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-            # Si esta esperando nombre para la cita
             if estado == "esperando_nombre_cita" and tipo == "text":
                 nombre = mensaje["text"]["body"].strip()
                 nueva_cita = Cita(
@@ -138,7 +139,6 @@ def recibir_mensajes(req):
                 enviar_solicitud_recibida(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-            # Si esta esperando nombre para atencion humana
             if estado == "esperando_nombre_atencion" and tipo == "text":
                 nombre = mensaje["text"]["body"].strip()
                 borrar_estado(numero_normalizado)
@@ -197,16 +197,53 @@ def recibir_mensajes(req):
         agregar_mensajes_log(f"Error: {str(e)}")
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-def manejar_punto_cita(numero, numero_normalizado):
-    cita = obtener_cita_activa(numero_normalizado)
+# ─── Ruta de recordatorios automaticos ───────────────────────────────────────
 
-    if cita is None:
-        guardar_estado(numero_normalizado, "esperando_nombre_cita")
-        enviar_pedir_nombre(numero)
-    elif cita.estado == "pendiente":
-        enviar_solicitud_en_espera(numero)
-    elif cita.estado == "confirmada":
-        enviar_opciones_cita(numero, cita)
+@app.route('/enviar_recordatorios', methods=['GET'])
+def enviar_recordatorios():
+    clave = request.args.get('clave')
+    if clave != CLAVE_RECORDATORIOS:
+        return jsonify({'error': 'No autorizado'}), 401
+
+    zona_mexico = pytz.timezone('America/Mexico_City')
+    hoy = datetime.now(zona_mexico).strftime('%d/%m/%Y')
+
+    citas_hoy = Cita.query.filter_by(
+        estado="confirmada",
+        recordatorio_enviado=False,
+        fecha_cita=hoy
+    ).all()
+
+    enviados = 0
+    for cita in citas_hoy:
+        mensaje_recordatorio = (
+            f"🦷 *¡Buenos días!* Hoy es el día de tu cita con *BOCA* "
+            f"a las {cita.hora_cita}.\n\n"
+            f"📍 Te esperamos en:\n"
+            f"Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V,\n"
+            f"La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
+            f"⚠️ Recuerda que no es posible reagendar tu cita. Si por "
+            f"alguna razón no puedes asistir, deberás cancelarla desde "
+            f"la opción 7️⃣ *Mi cita* del menú y ponerte en contacto "
+            f"con uno de nuestros especialistas para programar una nueva.\n\n"
+            f"¡Te esperamos! 😊"
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": cita.numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_recordatorio}
+        }
+        enviar_payload(data)
+        cita.recordatorio_enviado = True
+        db.session.commit()
+        agregar_mensajes_log(f"RECORDATORIO ENVIADO -> {cita.numero} | {cita.nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
+        enviados += 1
+
+    return jsonify({'mensaje': f'Recordatorios enviados: {enviados}', 'fecha': hoy}), 200
+
+# ─── Rutas del panel web ──────────────────────────────────────────────────────
 
 @app.route('/confirmar_cita', methods=['POST'])
 def confirmar_cita():
@@ -942,6 +979,17 @@ def enviar_confirmacion_llamada(number):
         }
     }
     enviar_payload(data)
+
+def manejar_punto_cita(numero, numero_normalizado):
+    cita = obtener_cita_activa(numero_normalizado)
+
+    if cita is None:
+        guardar_estado(numero_normalizado, "esperando_nombre_cita")
+        enviar_pedir_nombre(numero)
+    elif cita.estado == "pendiente":
+        enviar_solicitud_en_espera(numero)
+    elif cita.estado == "confirmada":
+        enviar_opciones_cita(numero, cita)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug=False)
