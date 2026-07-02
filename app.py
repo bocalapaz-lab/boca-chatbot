@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, render_template, redirect
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 import http.client
 import json
 import time
@@ -10,10 +10,6 @@ import pytz
 app = Flask(__name__)
 
 # ─── Configuración de base de datos con disco persistente ───────────────────
-# Si existe el disco persistente montado en /var/data (Render Starter+),
-# la base de datos se guarda ahí y sobrevive a redeploys y reinicios.
-# Si esa carpeta no existe (ej. corriendo en tu compu local), usa la ruta
-# normal como antes, para que puedas seguir probando sin problemas.
 DISK_PATH = '/var/data'
 if os.path.isdir(DISK_PATH):
     DB_PATH = os.path.join(DISK_PATH, 'metapython.db')
@@ -372,6 +368,98 @@ def cancelar_cita_admin():
         enviar_payload(data)
 
     return redirect('/')
+
+@app.route('/marcar_asistio', methods=['POST'])
+def marcar_asistio():
+    cita_id = request.form.get('cita_id')
+    cita = Cita.query.get(cita_id)
+    if cita:
+        cita.estado = "asistio"
+        db.session.commit()
+        agregar_mensajes_log(f"CITA ASISTIDA -> {cita.numero} | {cita.nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
+
+    return redirect('/')
+
+@app.route('/marcar_no_asistio', methods=['POST'])
+def marcar_no_asistio():
+    cita_id = request.form.get('cita_id')
+    cita = Cita.query.get(cita_id)
+    if cita:
+        numero = cita.numero
+        nombre = cita.nombre or "paciente"
+        info = f"{cita.fecha_cita} a las {cita.hora_cita}"
+        cita.estado = "no_asistio"
+        db.session.commit()
+        agregar_mensajes_log(f"CITA NO ASISTIDA -> {numero} | {nombre} | Cita del {info}")
+
+        mensaje_no_asistio = (
+            "😔 *Aviso sobre tu cita*\n\n"
+            f"Notamos que no llegaste a tu cita programada para el "
+            f"{info} con *BOCA*, por lo que ha sido cancelada "
+            f"automáticamente.\n\n"
+            "Si necesitas reagendar, escribe la opción 7️⃣ *Mi cita* "
+            "del menú principal para hacer una nueva solicitud.\n\n"
+            "¡Esperamos verte pronto! 😊\n\n"
+            "➡️ Escribe *0* para volver al menú principal."
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_no_asistio}
+        }
+        enviar_payload(data)
+
+    return redirect('/')
+
+# ─── Calendario semanal ───────────────────────────────────────────────────────
+
+@app.route('/calendario')
+def calendario():
+    inicio_str = request.args.get('inicio')
+    inicio = None
+    if inicio_str:
+        try:
+            inicio = datetime.strptime(inicio_str, '%d/%m/%Y').date()
+        except ValueError:
+            inicio = None
+
+    if not inicio:
+        zona_mexico = pytz.timezone('America/Mexico_City')
+        hoy = datetime.now(zona_mexico).date()
+        inicio = hoy - timedelta(days=hoy.weekday())  # Lunes de esta semana
+
+    dias = [inicio + timedelta(days=i) for i in range(5)]  # Lunes a Viernes
+    dias_str = [d.strftime('%d/%m/%Y') for d in dias]
+
+    horas = [f"{h:02d}:00" for h in range(10, 19)]  # 10:00 a 18:00
+
+    citas_semana = Cita.query.filter(
+        Cita.estado.in_(["confirmada", "asistio"]),
+        Cita.fecha_cita.in_(dias_str)
+    ).all()
+
+    grid = {hora: {fecha: None for fecha in dias_str} for hora in horas}
+    for cita in citas_semana:
+        if cita.hora_cita and ':' in cita.hora_cita:
+            hora_key = cita.hora_cita.split(':')[0].zfill(2) + ":00"
+            if hora_key in grid and cita.fecha_cita in grid[hora_key]:
+                grid[hora_key][cita.fecha_cita] = cita
+
+    dias_info = list(zip(dias, dias_str))
+
+    semana_anterior = (inicio - timedelta(days=7)).strftime('%d/%m/%Y')
+    semana_siguiente = (inicio + timedelta(days=7)).strftime('%d/%m/%Y')
+
+    return render_template(
+        'calendario.html',
+        dias_info=dias_info,
+        horas=horas,
+        grid=grid,
+        semana_anterior=semana_anterior,
+        semana_siguiente=semana_siguiente
+    )
 
 @app.route('/responder', methods=['POST'])
 def responder():
