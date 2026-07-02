@@ -27,9 +27,6 @@ class Cita(db.Model):
     numero = db.Column(db.String, nullable=False)
     nombre = db.Column(db.String, nullable=True)
     estado = db.Column(db.String, default="pendiente")
-    # "pendiente" -> solicitud recibida, aun no aprobada
-    # "confirmada" -> aprobada con fecha y hora
-    # "cancelada"  -> cancelada por el paciente o por admin
     fecha_cita = db.Column(db.String, nullable=True)
     hora_cita = db.Column(db.String, nullable=True)
     recordatorio_enviado = db.Column(db.Boolean, default=False)
@@ -123,7 +120,6 @@ def recibir_mensajes(req):
             if estado == "atencion_humana":
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-            # Si esta esperando que escriba su nombre para la cita
             if estado == "esperando_nombre_cita" and tipo == "text":
                 nombre = mensaje["text"]["body"].strip()
                 nueva_cita = Cita(
@@ -192,13 +188,10 @@ def manejar_punto_cita(numero, numero_normalizado):
     cita = obtener_cita_activa(numero_normalizado)
 
     if cita is None:
-        # No tiene cita activa -> pedir nombre primero
         guardar_estado(numero_normalizado, "esperando_nombre_cita")
         enviar_pedir_nombre(numero)
-
     elif cita.estado == "pendiente":
         enviar_solicitud_en_espera(numero)
-
     elif cita.estado == "confirmada":
         enviar_opciones_cita(numero, cita)
 
@@ -228,7 +221,11 @@ def confirmar_cita():
             f"necesitas un horario distinto, deberás cancelar esta "
             f"cita y contactarnos nuevamente con un especialista para "
             f"agendar una nueva.\n\n"
-            f"¡Te esperamos en *BOCA*! 😊"
+            f"🔓 Ahora tienes acceso a tu seguimiento de cita. Si "
+            f"deseas ver los detalles de tu cita o cancelarla, escribe "
+            f"*7* en cualquier momento.\n\n"
+            f"➡️ Escribe *0* para volver al menú principal, o escribe "
+            f"directamente el número de otra opción que te interese. 😊"
         )
         data = {
             "messaging_product": "whatsapp",
@@ -254,7 +251,6 @@ def cancelar_cita_admin():
         db.session.commit()
         agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {numero} | {nombre} | Cita del {info}")
 
-        # Notificar al paciente
         mensaje_cancelacion = (
             "😔 *Aviso importante sobre tu cita*\n\n"
             "Lamentamos informarte que, debido a causas ajenas a nuestra "
@@ -264,7 +260,9 @@ def cancelar_cita_admin():
             "esto pueda ocasionarte. Nuestro equipo se pondrá en contacto "
             "contigo a la brevedad para reagendar tu cita en el horario "
             "que mejor se adapte a tus necesidades.\n\n"
-            "Gracias por tu comprensión y confianza en nosotros. 🙏"
+            "Gracias por tu comprensión y confianza en nosotros. 🙏\n\n"
+            "➡️ Escribe *0* para volver al menú principal, o escribe "
+            "directamente el número de otra opción que te interese."
         )
         data = {
             "messaging_product": "whatsapp",
@@ -312,7 +310,8 @@ def finalizar():
                     "Tu atención personalizada con nuestro especialista ha "
                     "concluido. Esperamos haber resuelto tus dudas.\n\n"
                     "Si necesitas algo más, escribe *0* para volver al menú "
-                    "principal.\n\n"
+                    "principal, o escribe directamente el número de otra "
+                    "opción que te interese.\n\n"
                     "¡Gracias por contactar a *BOCA*! 😊"
                 )
             }
@@ -358,8 +357,8 @@ def enviar_pedir_nombre(number):
             "preview_url": False,
             "body": (
                 "📅 *Mi cita*\n\n"
-                "Para registrar tu solicitud de cita, por favor escríbenos "
-                "tu nombre completo en el siguiente mensaje. 😊"
+                "Para registrar tu solicitud de cita, por favor "
+                "escríbenos tu nombre completo. 😊"
             )
         }
     }
@@ -469,7 +468,8 @@ def enviar_detalle_cita(number, numero_normalizado):
                     f"📍 Te esperamos en:\n"
                     f"Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V,\n"
                     f"La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
-                    f"➡️ Escribe *0* para volver al menú principal."
+                    f"➡️ Escribe *0* para volver al menú principal, o escribe "
+                    f"directamente el número de otra opción que te interese. 😊"
                 )
             }
         }
@@ -538,7 +538,8 @@ def enviar_mantener_cita(number, numero_normalizado):
                     f"desde la opción 7️⃣ *Mi cita* del menú principal. "
                     f"Recuerda hacerlo con la mayor anticipación posible.\n\n"
                     f"¡Te esperamos en *BOCA*! 😊\n\n"
-                    f"➡️ Escribe *0* para volver al menú principal."
+                    f"➡️ Escribe *0* para volver al menú principal, o escribe "
+                    f"directamente el número de otra opción que te interese."
                 )
             }
         }
@@ -568,7 +569,8 @@ def confirmar_cancelacion(number, numero_normalizado):
                     "contactarte directamente con uno de nuestros "
                     "especialistas para acordar una nueva fecha.\n\n"
                     "¡Que tengas un excelente día! 😊\n\n"
-                    "➡️ Escribe *0* para volver al menú principal."
+                    "➡️ Escribe *0* para volver al menú principal, o escribe "
+                    "directamente el número de otra opción que te interese."
                 )
             }
         }
@@ -782,8 +784,6 @@ def enviar_horario(number):
                 "personalizada* (6️⃣) podría no tener respuesta inmediata, "
                 "ya que nuestro equipo no estará disponible para contestar "
                 "en ese momento.\n\n"
-                "Si es necesario, puedes intentar comunicarte directamente "
-                "al teléfono del consultorio.\n\n"
                 "➡️ Escribe *0* para volver al menú principal, o escribe "
                 "directamente el número de otra opción que te interese. 😊"
             )
@@ -868,7 +868,8 @@ def enviar_confirmacion_llamada(number):
                 "no confiar en ella y reportarlo directamente con "
                 "nosotros.\n\n"
                 "Gracias por confiar en *BOCA* para tu atención. 😊\n\n"
-                "➡️ Escribe *0* para volver al menú principal."
+                "➡️ Escribe *0* para volver al menú principal, o escribe "
+                "directamente el número de otra opción que te interese."
             )
         }
     }
