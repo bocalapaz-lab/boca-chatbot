@@ -19,6 +19,7 @@
         label { font-size: 13px; color: #555; }
         button { padding: 8px 16px; margin-top: 8px; margin-right: 8px; cursor: pointer; border: none; border-radius: 4px; font-size: 14px; }
         .btn-confirmar { background: #1565c0; color: white; }
+        .btn-rechazar { background: #e65100; color: white; }
         .btn-enviar { background: #2e7d32; color: white; }
         .btn-finalizar { background: #c62828; color: white; }
         .btn-cancelar-admin { background: #6d4c41; color: white; }
@@ -27,6 +28,7 @@
         .desde { font-size: 12px; color: #888; margin-top: 2px; }
         .form-inline { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
         .form-group { display: flex; flex-direction: column; }
+        .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -41,6 +43,7 @@
         <div class="numero">📱 {{ cita.numero }}</div>
         <div class="nombre">👤 {{ cita.nombre or 'Sin nombre' }}</div>
         <div class="desde">Solicitó cita el: {{ cita.creada_en.strftime('%d/%m/%Y a las %H:%M') }}</div>
+
         <form action="/confirmar_cita" method="POST">
             <input type="hidden" name="cita_id" value="{{ cita.id }}">
             <div class="form-inline">
@@ -54,6 +57,12 @@
                 </div>
                 <button type="submit" class="btn-confirmar">✅ Confirmar cita</button>
             </div>
+        </form>
+
+        <form action="/rechazar_solicitud" method="POST"
+              onsubmit="return confirm('¿Rechazar esta solicitud? Se notificará al paciente.');">
+            <input type="hidden" name="cita_id" value="{{ cita.id }}">
+            <button type="submit" class="btn-rechazar">❌ Rechazar solicitud</button>
         </form>
     </div>
     {% endfor %}
@@ -86,6 +95,7 @@
     {% for conv in conversaciones_activas %}
     <div class="panel panel-atencion">
         <div class="numero">📱 {{ conv.numero }}</div>
+        <div class="nombre">👤 {{ conv.nombre or 'Sin nombre' }}</div>
         <div class="desde">Esperando desde: {{ conv.desde }}</div>
         <form action="/responder" method="POST">
             <input type="hidden" name="numero" value="{{ conv.numero }}">
