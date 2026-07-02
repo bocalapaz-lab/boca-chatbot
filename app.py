@@ -25,6 +25,7 @@ class EstadoUsuario(db.Model):
 class Cita(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     numero = db.Column(db.String, nullable=False)
+    nombre = db.Column(db.String, nullable=True)
     estado = db.Column(db.String, default="pendiente")
     # "pendiente" -> solicitud recibida, aun no aprobada
     # "confirmada" -> aprobada con fecha y hora
@@ -122,6 +123,21 @@ def recibir_mensajes(req):
             if estado == "atencion_humana":
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
+            # Si esta esperando que escriba su nombre para la cita
+            if estado == "esperando_nombre_cita" and tipo == "text":
+                nombre = mensaje["text"]["body"].strip()
+                nueva_cita = Cita(
+                    numero=numero_normalizado,
+                    nombre=nombre,
+                    estado="pendiente"
+                )
+                db.session.add(nueva_cita)
+                db.session.commit()
+                borrar_estado(numero_normalizado)
+                agregar_mensajes_log(f"SOLICITUD DE CITA -> {numero_normalizado} | Nombre: {nombre}")
+                enviar_solicitud_recibida(numero)
+                return jsonify({'message': 'EVENT_RECEIVED'}), 200
+
             if tipo == "interactive":
                 interactive = mensaje.get("interactive", {})
                 if interactive.get("type") == "button_reply":
@@ -140,7 +156,7 @@ def recibir_mensajes(req):
                     elif boton_id == "btnsicancel":
                         confirmar_cancelacion(numero, numero_normalizado)
                     elif boton_id == "btnnocancel":
-                        enviar_menu(numero)
+                        enviar_mantener_cita(numero, numero_normalizado)
 
             elif tipo == "text":
                 texto = mensaje["text"]["body"].strip()
@@ -176,11 +192,9 @@ def manejar_punto_cita(numero, numero_normalizado):
     cita = obtener_cita_activa(numero_normalizado)
 
     if cita is None:
-        nueva_cita = Cita(numero=numero_normalizado, estado="pendiente")
-        db.session.add(nueva_cita)
-        db.session.commit()
-        agregar_mensajes_log(f"SOLICITUD DE CITA -> {numero_normalizado}")
-        enviar_solicitud_recibida(numero)
+        # No tiene cita activa -> pedir nombre primero
+        guardar_estado(numero_normalizado, "esperando_nombre_cita")
+        enviar_pedir_nombre(numero)
 
     elif cita.estado == "pendiente":
         enviar_solicitud_en_espera(numero)
@@ -202,8 +216,10 @@ def confirmar_cita():
         db.session.commit()
 
         numero = cita.numero
+        nombre = cita.nombre or "paciente"
         mensaje_confirmacion = (
             f"✅ *¡Tu cita ha sido confirmada!*\n\n"
+            f"👤 Nombre: {nombre}\n"
             f"📅 Fecha: {fecha}\n"
             f"⏰ Hora: {hora}\n\n"
             f"Te enviaremos un recordatorio el mismo día de tu cita "
@@ -222,7 +238,7 @@ def confirmar_cita():
             "text": {"preview_url": False, "body": mensaje_confirmacion}
         }
         enviar_payload(data)
-        agregar_mensajes_log(f"CITA CONFIRMADA -> {numero} | {fecha} a las {hora}")
+        agregar_mensajes_log(f"CITA CONFIRMADA -> {numero} | {nombre} | {fecha} a las {hora}")
 
     return redirect('/')
 
@@ -232,9 +248,33 @@ def cancelar_cita_admin():
     cita = Cita.query.get(cita_id)
     if cita:
         info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha asignada"
+        nombre = cita.nombre or "paciente"
+        numero = cita.numero
         cita.estado = "cancelada"
         db.session.commit()
-        agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {cita.numero} | Cita del {info}")
+        agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {numero} | {nombre} | Cita del {info}")
+
+        # Notificar al paciente
+        mensaje_cancelacion = (
+            "😔 *Aviso importante sobre tu cita*\n\n"
+            "Lamentamos informarte que, debido a causas ajenas a nuestra "
+            "voluntad, nos hemos visto en la necesidad de cancelar tu cita "
+            "programada con *BOCA*.\n\n"
+            "Pedimos sinceramente una disculpa por los inconvenientes que "
+            "esto pueda ocasionarte. Nuestro equipo se pondrá en contacto "
+            "contigo a la brevedad para reagendar tu cita en el horario "
+            "que mejor se adapte a tus necesidades.\n\n"
+            "Gracias por tu comprensión y confianza en nosotros. 🙏"
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_cancelacion}
+        }
+        enviar_payload(data)
+
     return redirect('/')
 
 @app.route('/responder', methods=['POST'])
@@ -307,6 +347,24 @@ def enviar_payload(data):
 
 # ─── Funciones de citas ───────────────────────────────────────────────────────
 
+def enviar_pedir_nombre(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "📅 *Mi cita*\n\n"
+                "Para registrar tu solicitud de cita, por favor escríbenos "
+                "tu nombre completo en el siguiente mensaje. 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
 def enviar_solicitud_recibida(number):
     number = normalizar_numero_mx(number)
     data = {
@@ -320,13 +378,17 @@ def enviar_solicitud_recibida(number):
                 "📅 *Solicitud de cita recibida*\n\n"
                 "Hemos recibido tu solicitud. Uno de nuestros especialistas "
                 "la revisará y te confirmará fecha y hora a la brevedad.\n\n"
+                "ℹ️ Recuerda que tu cita únicamente podrá ser confirmada si "
+                "previamente fue acordada con alguno de nuestros especialistas. "
+                "De no ser así, nos pondremos en contacto contigo para "
+                "orientarte.\n\n"
                 "⏳ Si en algún momento necesitas cancelar tu cita, te "
                 "pedimos hacerlo con la mayor anticipación posible para "
                 "liberar el espacio a otros pacientes.\n\n"
                 "⚠️ Ten en cuenta que *no realizamos cambios de horario*. "
-                "Si necesitas un horario distinto al que se te asigne, "
-                "deberás cancelar la cita y contactarnos nuevamente con "
-                "un especialista para agendar una nueva.\n\n"
+                "Si necesitas un horario distinto, deberás cancelar la cita "
+                "y contactarnos nuevamente con un especialista para agendar "
+                "una nueva.\n\n"
                 "¡Gracias por tu paciencia! 😊"
             )
         }
@@ -404,8 +466,9 @@ def enviar_detalle_cita(number, numero_normalizado):
                     f"🗓️ *Tu cita*\n\n"
                     f"📆 Fecha: {cita.fecha_cita}\n"
                     f"⏰ Hora: {cita.hora_cita}\n\n"
-                    f"📍 Te esperamos en Av. Rosendo Márquez 16, Doctors "
-                    f"Torres Médicas V, Consultorio 50.\n\n"
+                    f"📍 Te esperamos en:\n"
+                    f"Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V,\n"
+                    f"La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
                     f"➡️ Escribe *0* para volver al menú principal."
                 )
             }
@@ -455,14 +518,41 @@ def enviar_advertencia_cancelacion(number, numero_normalizado):
         }
         enviar_payload(data)
 
+def enviar_mantener_cita(number, numero_normalizado):
+    number = normalizar_numero_mx(number)
+    cita = obtener_cita_activa(numero_normalizado)
+    if cita and cita.estado == "confirmada":
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": number,
+            "type": "text",
+            "text": {
+                "preview_url": False,
+                "body": (
+                    f"✅ *Tu cita se mantiene*\n\n"
+                    f"No hay problema, tu cita sigue confirmada:\n\n"
+                    f"📆 Fecha: {cita.fecha_cita}\n"
+                    f"⏰ Hora: {cita.hora_cita}\n\n"
+                    f"Si en algún momento deseas cancelarla, puedes hacerlo "
+                    f"desde la opción 7️⃣ *Mi cita* del menú principal. "
+                    f"Recuerda hacerlo con la mayor anticipación posible.\n\n"
+                    f"¡Te esperamos en *BOCA*! 😊\n\n"
+                    f"➡️ Escribe *0* para volver al menú principal."
+                )
+            }
+        }
+        enviar_payload(data)
+
 def confirmar_cancelacion(number, numero_normalizado):
     number = normalizar_numero_mx(number)
     cita = obtener_cita_activa(numero_normalizado)
     if cita:
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
+        nombre = cita.nombre or "paciente"
         cita.estado = "cancelada"
         db.session.commit()
-        agregar_mensajes_log(f"CITA CANCELADA -> {numero_normalizado} | Cita del {info}")
+        agregar_mensajes_log(f"CITA CANCELADA -> {numero_normalizado} | {nombre} | Cita del {info}")
 
         data = {
             "messaging_product": "whatsapp",
@@ -472,12 +562,11 @@ def confirmar_cancelacion(number, numero_normalizado):
             "text": {
                 "preview_url": False,
                 "body": (
-                    "✅ *Tu cita ha sido cancelada*\n\n"
-                    "Gracias por avisarnos con anticipación — eso nos "
-                    "permite atender a otros pacientes que lo necesiten.\n\n"
+                    "✅ *Tu cita ha sido cancelada exitosamente*\n\n"
                     "Si deseas agendar una nueva cita, puedes volver a "
-                    "seleccionar la opción 7️⃣ del menú o contactarte "
-                    "directamente con uno de nuestros especialistas.\n\n"
+                    "seleccionar la opción 7️⃣ *Mi cita* del menú, o bien "
+                    "contactarte directamente con uno de nuestros "
+                    "especialistas para acordar una nueva fecha.\n\n"
                     "¡Que tengas un excelente día! 😊\n\n"
                     "➡️ Escribe *0* para volver al menú principal."
                 )
@@ -612,7 +701,7 @@ def enviar_ubicacion(number):
             "latitude": "19.056722627267366",
             "longitude": "-98.23117504866542",
             "name": "BOCA",
-            "address": "Av. Rosendo Márquez 16, 50 Doctors Torres Médicas V, La Paz, 72160 Heroica Puebla de Zaragoza, Pue."
+            "address": "Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V, La Paz, 72160, Heroica Puebla de Zaragoza, Pue."
         }
     }
     enviar_payload(data_ubicacion)
@@ -626,8 +715,8 @@ def enviar_ubicacion(number):
             "preview_url": False,
             "body": (
                 "📍 *Nuestra ubicación*\n\n"
-                "Av. Rosendo Márquez 16, 50 Doctors Torres Médicas V\n"
-                "La Paz, 72160 Heroica Puebla de Zaragoza, Pue.\n\n"
+                "Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V\n"
+                "La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
                 "¡Te esperamos! 😊\n\n"
                 "➡️ Escribe *0* para volver al menú principal, o escribe "
                 "directamente el número de otra opción que te interese."
@@ -786,4 +875,4 @@ def enviar_confirmacion_llamada(number):
     enviar_payload(data)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80, debug=True)
+    app.run(host='0.0.0.0', port=80, debug=False)
