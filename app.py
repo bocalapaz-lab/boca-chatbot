@@ -120,6 +120,7 @@ def recibir_mensajes(req):
             if estado == "atencion_humana":
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
+            # Si esta esperando nombre para la cita
             if estado == "esperando_nombre_cita" and tipo == "text":
                 nombre = mensaje["text"]["body"].strip()
                 nueva_cita = Cita(
@@ -134,14 +135,23 @@ def recibir_mensajes(req):
                 enviar_solicitud_recibida(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
+            # Si esta esperando nombre para atencion humana
+            if estado == "esperando_nombre_atencion" and tipo == "text":
+                nombre = mensaje["text"]["body"].strip()
+                borrar_estado(numero_normalizado)
+                guardar_estado(numero_normalizado, "atencion_humana")
+                agregar_mensajes_log(f"ATENCION HUMANA -> {numero_normalizado} | Nombre: {nombre}")
+                enviar_pausa_bot(numero)
+                return jsonify({'message': 'EVENT_RECEIVED'}), 200
+
             if tipo == "interactive":
                 interactive = mensaje.get("interactive", {})
                 if interactive.get("type") == "button_reply":
                     boton_id = interactive["button_reply"]["id"]
 
                     if boton_id == "btnmensaje":
-                        enviar_pausa_bot(numero)
-                        guardar_estado(numero_normalizado, "atencion_humana")
+                        guardar_estado(numero_normalizado, "esperando_nombre_atencion")
+                        enviar_pedir_nombre_atencion(numero)
                     elif boton_id == "btnllamada":
                         agregar_mensajes_log(f"SOLICITUD DE LLAMADA -> {numero_normalizado}")
                         enviar_confirmacion_llamada(numero)
@@ -358,6 +368,24 @@ def enviar_pedir_nombre(number):
             "body": (
                 "📅 *Mi cita*\n\n"
                 "Para registrar tu solicitud de cita, por favor "
+                "escríbenos tu nombre completo. 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
+def enviar_pedir_nombre_atencion(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "💬 *Ayuda personalizada*\n\n"
+                "Para poder atenderte mejor, por favor "
                 "escríbenos tu nombre completo. 😊"
             )
         }
