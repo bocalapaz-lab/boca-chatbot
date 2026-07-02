@@ -20,6 +20,7 @@ class Log(db.Model):
 class EstadoUsuario(db.Model):
     numero = db.Column(db.String, primary_key=True)
     estado = db.Column(db.String)
+    nombre = db.Column(db.String, nullable=True)
     desde = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Cita(db.Model):
@@ -62,12 +63,14 @@ def obtener_estado(numero):
     registro = EstadoUsuario.query.get(numero)
     return registro.estado if registro else None
 
-def guardar_estado(numero, estado):
+def guardar_estado(numero, estado, nombre=None):
     registro = EstadoUsuario.query.get(numero)
     if registro:
         registro.estado = estado
+        if nombre:
+            registro.nombre = nombre
     else:
-        registro = EstadoUsuario(numero=numero, estado=estado)
+        registro = EstadoUsuario(numero=numero, estado=estado, nombre=nombre)
         db.session.add(registro)
     db.session.commit()
 
@@ -139,7 +142,7 @@ def recibir_mensajes(req):
             if estado == "esperando_nombre_atencion" and tipo == "text":
                 nombre = mensaje["text"]["body"].strip()
                 borrar_estado(numero_normalizado)
-                guardar_estado(numero_normalizado, "atencion_humana")
+                guardar_estado(numero_normalizado, "atencion_humana", nombre=nombre)
                 agregar_mensajes_log(f"ATENCION HUMANA -> {numero_normalizado} | Nombre: {nombre}")
                 enviar_pausa_bot(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
@@ -246,6 +249,43 @@ def confirmar_cita():
         }
         enviar_payload(data)
         agregar_mensajes_log(f"CITA CONFIRMADA -> {numero} | {nombre} | {fecha} a las {hora}")
+
+    return redirect('/')
+
+@app.route('/rechazar_solicitud', methods=['POST'])
+def rechazar_solicitud():
+    cita_id = request.form.get('cita_id')
+    cita = Cita.query.get(cita_id)
+    if cita:
+        nombre = cita.nombre or "paciente"
+        numero = cita.numero
+        cita.estado = "cancelada"
+        db.session.commit()
+        agregar_mensajes_log(f"SOLICITUD RECHAZADA -> {numero} | {nombre}")
+
+        mensaje_rechazo = (
+            "ℹ️ *Aviso sobre tu solicitud de cita*\n\n"
+            "Hemos revisado tu solicitud y no encontramos información "
+            "pertinente asociada a ella. Es posible que aún no hayas "
+            "acordado una cita directamente con alguno de nuestros "
+            "especialistas.\n\n"
+            "Si deseas agendar una cita, te invitamos a comunicarte "
+            "primero con nosotros a través de la opción "
+            "6️⃣ *Ayuda personalizada*, donde uno de nuestros "
+            "especialistas podrá orientarte y acordar contigo la fecha "
+            "y hora más conveniente.\n\n"
+            "¡Gracias por tu comprensión! 😊\n\n"
+            "➡️ Escribe *0* para volver al menú principal, o escribe "
+            "directamente el número de otra opción que te interese."
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_rechazo}
+        }
+        enviar_payload(data)
 
     return redirect('/')
 
