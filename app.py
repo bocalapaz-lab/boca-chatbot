@@ -41,6 +41,13 @@ class Cita(db.Model):
     recordatorio_enviado = db.Column(db.Boolean, default=False)
     creada_en = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Llamada(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.String, nullable=False)
+    nombre = db.Column(db.String, nullable=True)
+    estado = db.Column(db.String, default="pendiente")
+    creada_en = db.Column(db.DateTime, default=datetime.utcnow)
+
 with app.app_context():
     db.create_all()
 
@@ -54,12 +61,14 @@ def index():
     conversaciones_activas = EstadoUsuario.query.filter_by(estado="atencion_humana").all()
     citas_pendientes = Cita.query.filter_by(estado="pendiente").order_by(Cita.creada_en.asc()).all()
     citas_confirmadas = Cita.query.filter_by(estado="confirmada").order_by(Cita.fecha_cita.asc()).all()
+    llamadas_pendientes = Llamada.query.filter_by(estado="pendiente").order_by(Llamada.creada_en.asc()).all()
     return render_template(
         'index.html',
         registros=registros_ordenados,
         conversaciones_activas=conversaciones_activas,
         citas_pendientes=citas_pendientes,
-        citas_confirmadas=citas_confirmadas
+        citas_confirmadas=citas_confirmadas,
+        llamadas_pendientes=llamadas_pendientes
     )
 
 def agregar_mensajes_log(texto):
@@ -154,6 +163,20 @@ def recibir_mensajes(req):
                 enviar_pausa_bot(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
+            if estado == "esperando_nombre_llamada" and tipo == "text":
+                nombre = mensaje["text"]["body"].strip()
+                nueva_llamada = Llamada(
+                    numero=numero_normalizado,
+                    nombre=nombre,
+                    estado="pendiente"
+                )
+                db.session.add(nueva_llamada)
+                db.session.commit()
+                borrar_estado(numero_normalizado)
+                agregar_mensajes_log(f"SOLICITUD DE LLAMADA -> {numero_normalizado} | Nombre: {nombre}")
+                enviar_solicitud_llamada_recibida(numero)
+                return jsonify({'message': 'EVENT_RECEIVED'}), 200
+
             if tipo == "interactive":
                 interactive = mensaje.get("interactive", {})
                 if interactive.get("type") == "button_reply":
@@ -163,8 +186,8 @@ def recibir_mensajes(req):
                         guardar_estado(numero_normalizado, "esperando_nombre_atencion")
                         enviar_pedir_nombre_atencion(numero)
                     elif boton_id == "btnllamada":
-                        agregar_mensajes_log(f"SOLICITUD DE LLAMADA -> {numero_normalizado}")
-                        enviar_confirmacion_llamada(numero)
+                        guardar_estado(numero_normalizado, "esperando_nombre_llamada")
+                        enviar_pedir_nombre_llamada(numero)
                     elif boton_id == "btnvercita":
                         enviar_detalle_cita(numero, numero_normalizado)
                     elif boton_id == "btncancelarcita":
@@ -405,6 +428,48 @@ def marcar_no_asistio():
 
     return redirect('/')
 
+@app.route('/llamada_hecha', methods=['POST'])
+def llamada_hecha():
+    llamada_id = request.form.get('llamada_id')
+    llamada = Llamada.query.get(llamada_id)
+    if llamada:
+        numero = llamada.numero
+        nombre = llamada.nombre or "paciente"
+        llamada.estado = "completada"
+        db.session.commit()
+        agregar_mensajes_log(f"LLAMADA COMPLETADA -> {numero} | {nombre}")
+
+        mensaje_llamada_hecha = (
+            "✅ *¡Gracias por tu paciencia!*\n\n"
+            "Esperamos haber resuelto todas tus dudas durante la "
+            "llamada. Si necesitas algo más, no dudes en contactarnos "
+            "nuevamente.\n\n"
+            "¡Gracias por confiar en *BOCA*! 😊\n\n"
+            "➡️ Escribe *0* para volver al menú principal, o escribe "
+            "directamente el número de otra opción que te interese."
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_llamada_hecha}
+        }
+        enviar_payload(data)
+
+    return redirect('/')
+
+@app.route('/quitar_llamada', methods=['POST'])
+def quitar_llamada():
+    llamada_id = request.form.get('llamada_id')
+    llamada = Llamada.query.get(llamada_id)
+    if llamada:
+        agregar_mensajes_log(f"SOLICITUD DE LLAMADA DESCARTADA -> {llamada.numero} | {llamada.nombre or 'Sin nombre'}")
+        db.session.delete(llamada)
+        db.session.commit()
+
+    return redirect('/')
+
 # ─── Calendario semanal ───────────────────────────────────────────────────────
 
 @app.route('/calendario')
@@ -560,6 +625,24 @@ def enviar_pedir_nombre_atencion(number):
     }
     enviar_payload(data)
 
+def enviar_pedir_nombre_llamada(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "📞 *Solicitar llamada*\n\n"
+                "Para registrar tu solicitud, por favor "
+                "escríbenos tu nombre completo. 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
 def enviar_solicitud_recibida(number):
     number = normalizar_numero_mx(number)
     data = {
@@ -585,6 +668,39 @@ def enviar_solicitud_recibida(number):
                 "y contactarnos nuevamente con un especialista para agendar "
                 "una nueva.\n\n"
                 "¡Gracias por tu paciencia! 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
+def enviar_solicitud_llamada_recibida(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "📞 *Solicitud de llamada recibida*\n\n"
+                "Hemos registrado tu solicitud y uno de nuestros "
+                "especialistas se pondrá en contacto contigo por teléfono "
+                "lo antes posible.\n\n"
+                "ℹ️ No siempre estamos disponibles de inmediato y podríamos "
+                "estar ocupados en otras consultas, pero ten la seguridad "
+                "de que tu solicitud ya quedó registrada y será atendida.\n\n"
+                "💬 Si mientras tanto prefieres dejarnos un mensaje con tu "
+                "duda o necesitas algo urgente, puedes usar la opción "
+                "*Hablar con nosotros* dentro de 2️⃣ *Ayuda personalizada*.\n\n"
+                "🔒 Por tu seguridad, te contactaremos únicamente desde este "
+                "mismo número de WhatsApp. Si recibes una llamada de un "
+                "número distinto que diga representarnos, te recomendamos "
+                "no confiar en ella y reportarlo directamente con "
+                "nosotros.\n\n"
+                "Gracias por confiar en *BOCA* para tu atención. 😊\n\n"
+                "➡️ Escribe *0* para volver al menú principal, o escribe "
+                "directamente el número de otra opción que te interese."
             )
         }
     }
@@ -903,33 +1019,6 @@ def enviar_pausa_bot(number):
                 "mismo medio.\n\n"
                 "Te pedimos un poco de paciencia mientras te asignamos con "
                 "alguien disponible. 😊"
-            )
-        }
-    }
-    enviar_payload(data)
-
-def enviar_confirmacion_llamada(number):
-    number = normalizar_numero_mx(number)
-    data = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": number,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "📞 *Solicitud de llamada recibida*\n\n"
-                "Hemos registrado tu solicitud y uno de nuestros "
-                "especialistas se pondrá en contacto contigo por teléfono "
-                "lo antes posible.\n\n"
-                "Por tu seguridad, te contactaremos únicamente desde este "
-                "mismo número de WhatsApp. Si recibes una llamada de un "
-                "número distinto que diga representarnos, te recomendamos "
-                "no confiar en ella y reportarlo directamente con "
-                "nosotros.\n\n"
-                "Gracias por confiar en *BOCA* para tu atención. 😊\n\n"
-                "➡️ Escribe *0* para volver al menú principal, o escribe "
-                "directamente el número de otra opción que te interese."
             )
         }
     }
