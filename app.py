@@ -2,6 +2,8 @@ from flask import Flask, jsonify, request, render_template, redirect, Response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from functools import wraps
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 import http.client
 import json
 import time
@@ -40,6 +42,7 @@ class Cita(db.Model):
     fecha_cita = db.Column(db.String, nullable=True)
     hora_cita = db.Column(db.String, nullable=True)
     recordatorio_enviado = db.Column(db.Boolean, default=False)
+    google_event_id = db.Column(db.String, nullable=True)
     creada_en = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Llamada(db.Model):
@@ -132,6 +135,72 @@ def obtener_cita_activa(numero):
         Cita.numero == numero,
         Cita.estado.in_(["pendiente", "confirmada"])
     ).first()
+
+# ─── Integración con Google Calendar ─────────────────────────────────────────
+# Si la credencial no existe o algo falla, el bot sigue funcionando normal
+# con WhatsApp; Calendar es un extra, nunca un requisito para operar.
+
+GOOGLE_CREDENTIALS_PATH = '/etc/secrets/google-credentials.json'
+GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'bocalapaz@gmail.com')
+
+def obtener_servicio_calendar():
+    if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
+        return None
+    try:
+        credenciales = service_account.Credentials.from_service_account_file(
+            GOOGLE_CREDENTIALS_PATH,
+            scopes=['https://www.googleapis.com/auth/calendar']
+        )
+        return build('calendar', 'v3', credentials=credenciales)
+    except Exception as e:
+        agregar_mensajes_log(f"Error Google Calendar (credenciales): {str(e)}")
+        return None
+
+def crear_evento_calendar(cita):
+    servicio = obtener_servicio_calendar()
+    if not servicio:
+        return None
+    try:
+        zona_mexico = pytz.timezone('America/Mexico_City')
+        inicio_naive = datetime.strptime(f"{cita.fecha_cita} {cita.hora_cita}", "%d/%m/%Y %H:%M")
+        inicio = zona_mexico.localize(inicio_naive)
+        fin = inicio + timedelta(hours=1)
+
+        evento = {
+            'summary': f'Cita BOCA - {cita.nombre or "Paciente"}',
+            'description': (
+                f'Paciente: {cita.nombre or "Sin nombre"}\n'
+                f'Teléfono: {cita.numero}'
+            ),
+            'location': (
+                'Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V, '
+                'La Paz, 72160, Heroica Puebla de Zaragoza, Pue.'
+            ),
+            'start': {'dateTime': inicio.isoformat()},
+            'end': {'dateTime': fin.isoformat()},
+        }
+        resultado = servicio.events().insert(
+            calendarId=GOOGLE_CALENDAR_ID, body=evento
+        ).execute()
+        agregar_mensajes_log(f"CALENDAR: evento creado -> {resultado.get('id')}")
+        return resultado.get('id')
+    except Exception as e:
+        agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}")
+        return None
+
+def eliminar_evento_calendar(google_event_id):
+    if not google_event_id:
+        return
+    servicio = obtener_servicio_calendar()
+    if not servicio:
+        return
+    try:
+        servicio.events().delete(
+            calendarId=GOOGLE_CALENDAR_ID, eventId=google_event_id
+        ).execute()
+        agregar_mensajes_log(f"CALENDAR: evento eliminado -> {google_event_id}")
+    except Exception as e:
+        agregar_mensajes_log(f"Error Google Calendar (eliminar evento): {str(e)}")
 
 TOKEN_CESAR = "cesar"
 CLAVE_RECORDATORIOS = "boca2026xK9mP3qL7nR2vT8wJ4cF6yH1"
@@ -311,6 +380,9 @@ def confirmar_cita():
         cita.hora_cita = hora
         db.session.commit()
 
+        cita.google_event_id = crear_evento_calendar(cita)
+        db.session.commit()
+
         numero = cita.numero
         nombre = cita.nombre or "paciente"
         mensaje_confirmacion = (
@@ -389,6 +461,7 @@ def cancelar_cita_admin():
         info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha asignada"
         nombre = cita.nombre or "paciente"
         numero = cita.numero
+        eliminar_evento_calendar(cita.google_event_id)
         cita.estado = "cancelada"
         db.session.commit()
         agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {numero} | {nombre} | Cita del {info}")
@@ -438,6 +511,7 @@ def marcar_no_asistio():
         numero = cita.numero
         nombre = cita.nombre or "paciente"
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
+        eliminar_evento_calendar(cita.google_event_id)
         cita.estado = "no_asistio"
         db.session.commit()
         agregar_mensajes_log(f"CITA NO ASISTIDA -> {numero} | {nombre} | Cita del {info}")
@@ -905,6 +979,7 @@ def confirmar_cancelacion(number, numero_normalizado):
     if cita:
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
         nombre = cita.nombre or "paciente"
+        eliminar_evento_calendar(cita.google_event_id)
         cita.estado = "cancelada"
         db.session.commit()
         agregar_mensajes_log(f"CITA CANCELADA -> {numero_normalizado} | {nombre} | Cita del {info}")
