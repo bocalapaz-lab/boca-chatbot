@@ -54,6 +54,14 @@ class Llamada(db.Model):
 
 with app.app_context():
     db.create_all()
+    # Migración: si la base de datos ya existía de antes (con citas reales
+    # guardadas en el disco), le agrega la columna nueva sin borrar nada.
+    inspector = db.inspect(db.engine)
+    columnas_cita = [col['name'] for col in inspector.get_columns('cita')]
+    if 'google_event_id' not in columnas_cita:
+        with db.engine.connect() as conexion:
+            conexion.execute(db.text('ALTER TABLE cita ADD COLUMN google_event_id VARCHAR'))
+            conexion.commit()
 
 def ordenar_por_fecha_y_hora(registros):
     return sorted(registros, key=lambda x: x.fecha_y_hora, reverse=True)
