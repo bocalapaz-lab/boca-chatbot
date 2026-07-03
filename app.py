@@ -178,18 +178,10 @@ def recibir_mensajes(req):
                 texto = mensaje["text"]["body"].strip()
 
                 if texto == "1":
-                    enviar_conocenos(numero)
-                elif texto == "2":
-                    enviar_video_construccion(numero)
-                elif texto == "3":
-                    enviar_ubicacion(numero)
-                elif texto == "4":
-                    enviar_estacionamiento(numero)
-                elif texto == "5":
                     enviar_horario(numero)
-                elif texto == "6":
+                elif texto == "2":
                     enviar_ayuda_personalizada(numero)
-                elif texto == "7":
+                elif texto == "3":
                     manejar_punto_cita(numero, numero_normalizado)
                 elif texto == "0":
                     enviar_menu(numero)
@@ -231,7 +223,7 @@ def enviar_recordatorios():
             f"La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
             f"⚠️ Recuerda que no es posible reagendar tu cita. Si por "
             f"alguna razón no puedes asistir, deberás cancelarla desde "
-            f"la opción 7️⃣ *Mi cita* del menú y ponerte en contacto "
+            f"la opción 3️⃣ *Mi cita* del menú y ponerte en contacto "
             f"con uno de nuestros especialistas para programar una nueva.\n\n"
             f"¡Te esperamos! 😊"
         )
@@ -280,7 +272,7 @@ def confirmar_cita():
             f"agendar una nueva.\n\n"
             f"🔓 Ahora tienes acceso a tu seguimiento de cita. Si "
             f"deseas ver los detalles de tu cita o cancelarla, escribe "
-            f"*7* en cualquier momento.\n\n"
+            f"*3* en cualquier momento.\n\n"
             f"➡️ Escribe *0* para volver al menú principal, o escribe "
             f"directamente el número de otra opción que te interese. 😊"
         )
@@ -315,7 +307,7 @@ def rechazar_solicitud():
             "especialistas.\n\n"
             "Si deseas agendar una cita, te invitamos a comunicarte "
             "primero con nosotros a través de la opción "
-            "6️⃣ *Ayuda personalizada*, donde uno de nuestros "
+            "2️⃣ *Ayuda personalizada*, donde uno de nuestros "
             "especialistas podrá orientarte y acordar contigo la fecha "
             "y hora más conveniente.\n\n"
             "¡Gracias por tu comprensión! 😊\n\n"
@@ -397,7 +389,7 @@ def marcar_no_asistio():
             f"Notamos que no llegaste a tu cita programada para el "
             f"{info} con *BOCA*, por lo que ha sido cancelada "
             f"automáticamente.\n\n"
-            "Si necesitas reagendar, escribe la opción 7️⃣ *Mi cita* "
+            "Si necesitas reagendar, escribe la opción 3️⃣ *Mi cita* "
             "del menú principal para hacer una nueva solicitud.\n\n"
             "¡Esperamos verte pronto! 😊\n\n"
             "➡️ Escribe *0* para volver al menú principal."
@@ -739,7 +731,7 @@ def enviar_mantener_cita(number, numero_normalizado):
                     f"📆 Fecha: {cita.fecha_cita}\n"
                     f"⏰ Hora: {cita.hora_cita}\n\n"
                     f"Si en algún momento deseas cancelarla, puedes hacerlo "
-                    f"desde la opción 7️⃣ *Mi cita* del menú principal. "
+                    f"desde la opción 3️⃣ *Mi cita* del menú principal. "
                     f"Recuerda hacerlo con la mayor anticipación posible.\n\n"
                     f"¡Te esperamos en *BOCA*! 😊\n\n"
                     f"➡️ Escribe *0* para volver al menú principal, o escribe "
@@ -769,7 +761,7 @@ def confirmar_cancelacion(number, numero_normalizado):
                 "body": (
                     "✅ *Tu cita ha sido cancelada exitosamente*\n\n"
                     "Si deseas agendar una nueva cita, puedes volver a "
-                    "seleccionar la opción 7️⃣ *Mi cita* del menú, o bien "
+                    "seleccionar la opción 3️⃣ *Mi cita* del menú, o bien "
                     "contactarte directamente con uno de nuestros "
                     "especialistas para acordar una nueva fecha.\n\n"
                     "¡Que tengas un excelente día! 😊\n\n"
@@ -806,13 +798,9 @@ def enviar_bienvenida(number):
                 "Soy el asistente virtual del consultorio. Estoy aquí para "
                 "ayudarte en lo que necesites. 😊\n\n"
                 "Elige una opción escribiendo el número:\n\n"
-                "1️⃣ Conócenos\n"
-                "2️⃣ Video de nosotros\n"
-                "3️⃣ Ubicación del consultorio\n"
-                "4️⃣ Estacionamiento\n"
-                "5️⃣ Horario de atención\n"
-                "6️⃣ Ayuda personalizada\n"
-                "7️⃣ Mi cita\n\n"
+                "1️⃣ Horario de atención\n"
+                "2️⃣ Ayuda personalizada\n"
+                "3️⃣ Mi cita\n\n"
                 "Escribe el número de la opción que te interese."
             )
         }
@@ -830,146 +818,14 @@ def enviar_menu(number):
             "preview_url": False,
             "body": (
                 "📋 *Menú principal*\n\n"
-                "1️⃣ Conócenos\n"
-                "2️⃣ Video de nosotros\n"
-                "3️⃣ Ubicación del consultorio\n"
-                "4️⃣ Estacionamiento\n"
-                "5️⃣ Horario de atención\n"
-                "6️⃣ Ayuda personalizada\n"
-                "7️⃣ Mi cita\n\n"
+                "1️⃣ Horario de atención\n"
+                "2️⃣ Ayuda personalizada\n"
+                "3️⃣ Mi cita\n\n"
                 "Escribe el número de la opción que te interese."
             )
         }
     }
     enviar_payload(data)
-
-def enviar_conocenos(number):
-    number = normalizar_numero_mx(number)
-    data = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": number,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "👋 *Conócenos*\n\n"
-                "En *BOCA* contamos con un equipo especializado, comprometido "
-                "con tu salud y bienestar:\n\n"
-                "🦷 *Dra. Yaxcy Reyes García*\n"
-                "Especialista en Cirugía Maxilofacial\n\n"
-                "🦷 *Dr. Rubén Fernández Tamayo*\n"
-                "Especialista en Cirugía Maxilofacial\n\n"
-                "🎯 *Misión*\n"
-                "Brindar atención odontológica y maxilofacial de excelencia, "
-                "con un enfoque humano y profesional, utilizando técnicas "
-                "actualizadas para mejorar la salud y calidad de vida de "
-                "nuestros pacientes.\n\n"
-                "🔭 *Visión*\n"
-                "Ser un consultorio de referencia en cirugía maxilofacial, "
-                "reconocido por la confianza de nuestros pacientes, la "
-                "calidez de nuestro trato y la calidad de nuestros resultados.\n\n"
-                "➡️ Escribe *0* para volver al menú principal, o escribe "
-                "directamente el número de otra opción que te interese. 😊"
-            )
-        }
-    }
-    enviar_payload(data)
-
-def enviar_video_construccion(number):
-    number = normalizar_numero_mx(number)
-    data = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": number,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "🚧 *Video en construcción*\n\n"
-                "Estamos preparando con mucho cariño un video para darte la "
-                "bienvenida que te mereces y mostrarte nuestras instalaciones. "
-                "Estará disponible muy pronto. ¡Gracias por tu paciencia! 😊\n\n"
-                "➡️ Escribe *0* para volver al menú principal, o escribe "
-                "directamente el número de otra opción que te interese."
-            )
-        }
-    }
-    enviar_payload(data)
-
-def enviar_ubicacion(number):
-    number = normalizar_numero_mx(number)
-    data_ubicacion = {
-        "messaging_product": "whatsapp",
-        "to": number,
-        "type": "location",
-        "location": {
-            "latitude": "19.056722627267366",
-            "longitude": "-98.23117504866542",
-            "name": "BOCA",
-            "address": "Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V, La Paz, 72160, Heroica Puebla de Zaragoza, Pue."
-        }
-    }
-    enviar_payload(data_ubicacion)
-    time.sleep(1.5)
-    data_texto = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": number,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "📍 *Nuestra ubicación*\n\n"
-                "Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V\n"
-                "La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
-                "¡Te esperamos! 😊\n\n"
-                "➡️ Escribe *0* para volver al menú principal, o escribe "
-                "directamente el número de otra opción que te interese."
-            )
-        }
-    }
-    enviar_payload(data_texto)
-
-def enviar_estacionamiento(number):
-    number = normalizar_numero_mx(number)
-    data_ubicacion = {
-        "messaging_product": "whatsapp",
-        "to": number,
-        "type": "location",
-        "location": {
-            "latitude": "19.057766",
-            "longitude": "-98.231919",
-            "name": "Estacionamiento",
-            "address": "La Paz, 72160 Heroica Puebla de Zaragoza, Pue."
-        }
-    }
-    enviar_payload(data_ubicacion)
-    time.sleep(1.5)
-    data_texto = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": number,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "🅿️ *Estacionamiento*\n\n"
-                "Como medida de comodidad para ti, te compartimos la "
-                "ubicación de un estacionamiento cercano, justo cruzando "
-                "la calle (ubicación enviada arriba 👆).\n\n"
-                "ℹ️ Este estacionamiento es independiente y *no pertenece "
-                "ni al hospital ni a nuestro consultorio BOCA*. Es un "
-                "servicio externo que se encuentra cerca para tu comodidad.\n\n"
-                "⚠️ Por lo anterior, *BOCA no se hace responsable* por tu "
-                "vehículo, sus pertenencias, ni por cualquier situación que "
-                "pudiera presentarse en dicho estacionamiento.\n\n"
-                "➡️ Escribe *0* para volver al menú principal, o escribe "
-                "directamente el número de otra opción que te interese. 😊"
-            )
-        }
-    }
-    enviar_payload(data_texto)
 
 def enviar_horario(number):
     number = normalizar_numero_mx(number)
@@ -985,7 +841,7 @@ def enviar_horario(number):
                 "📅 Lunes a Viernes\n"
                 "⏰ 10:00 am – 7:00 pm\n\n"
                 "ℹ️ Fuera de este horario, la opción de *Ayuda "
-                "personalizada* (6️⃣) podría no tener respuesta inmediata, "
+                "personalizada* (2️⃣) podría no tener respuesta inmediata, "
                 "ya que nuestro equipo no estará disponible para contestar "
                 "en ese momento.\n\n"
                 "➡️ Escribe *0* para volver al menú principal, o escribe "
@@ -1010,7 +866,7 @@ def enviar_ayuda_personalizada(number):
                     "Cuéntanos cómo prefieres que te ayudemos:\n\n"
                     "ℹ️ Si nos escribes fuera de nuestro horario de "
                     "atención, es posible que tu mensaje no sea respondido "
-                    "de inmediato. Te invitamos a revisar el punto 5️⃣ para "
+                    "de inmediato. Te invitamos a revisar el punto 1️⃣ para "
                     "conocer nuestros horarios."
                 )
             },
