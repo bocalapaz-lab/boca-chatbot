@@ -1018,7 +1018,13 @@ def enviar_pausa_bot(number):
                 "especialistas, quien te atenderá personalmente por este "
                 "mismo medio.\n\n"
                 "Te pedimos un poco de paciencia mientras te asignamos con "
-                "alguien disponible. 😊"
+                "alguien disponible. 😊\n\n"
+                "💬 Mientras tanto, si ya sabes qué necesitas, puedes "
+                "escribir tu mensaje o duda ahora mismo. Así, cuando uno "
+                "de nuestros especialistas revise tu conversación, podrá "
+                "leer directamente lo que necesitas y responderte más "
+                "rápido, sin tener que preguntarte primero en qué te "
+                "podemos ayudar."
             )
         }
     }
