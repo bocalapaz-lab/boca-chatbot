@@ -1,6 +1,7 @@
-from flask import Flask, jsonify, request, render_template, redirect
+from flask import Flask, jsonify, request, render_template, redirect, Response
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
+from functools import wraps
 import http.client
 import json
 import time
@@ -54,7 +55,36 @@ with app.app_context():
 def ordenar_por_fecha_y_hora(registros):
     return sorted(registros, key=lambda x: x.fecha_y_hora, reverse=True)
 
+# ─── Autenticación del panel web ─────────────────────────────────────────────
+# Protege todas las rutas del panel (index, calendario, confirmar, cancelar,
+# etc.) con usuario y contraseña. NO se aplica a /webhook ni a
+# /enviar_recordatorios, ya que esas rutas necesitan funcionar
+# automáticamente (Meta y cron-job.org) y tienen su propia protección.
+
+def verificar_credenciales(usuario, contrasena):
+    return (
+        usuario == os.environ.get('PANEL_USER') and
+        contrasena == os.environ.get('PANEL_PASSWORD')
+    )
+
+def solicitar_autenticacion():
+    return Response(
+        'Acceso restringido. Ingresa tus credenciales para continuar.',
+        401,
+        {'WWW-Authenticate': 'Basic realm="Panel BOCA"'}
+    )
+
+def requiere_autenticacion(f):
+    @wraps(f)
+    def decorada(*args, **kwargs):
+        auth = request.authorization
+        if not auth or not verificar_credenciales(auth.username, auth.password):
+            return solicitar_autenticacion()
+        return f(*args, **kwargs)
+    return decorada
+
 @app.route('/')
+@requiere_autenticacion
 def index():
     registros = Log.query.all()
     registros_ordenados = ordenar_por_fecha_y_hora(registros)
@@ -268,6 +298,7 @@ def enviar_recordatorios():
 # ─── Rutas del panel web ──────────────────────────────────────────────────────
 
 @app.route('/confirmar_cita', methods=['POST'])
+@requiere_autenticacion
 def confirmar_cita():
     cita_id = request.form.get('cita_id')
     fecha = request.form.get('fecha')
@@ -312,6 +343,7 @@ def confirmar_cita():
     return redirect('/')
 
 @app.route('/rechazar_solicitud', methods=['POST'])
+@requiere_autenticacion
 def rechazar_solicitud():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
@@ -349,6 +381,7 @@ def rechazar_solicitud():
     return redirect('/')
 
 @app.route('/cancelar_cita_admin', methods=['POST'])
+@requiere_autenticacion
 def cancelar_cita_admin():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
@@ -385,6 +418,7 @@ def cancelar_cita_admin():
     return redirect('/')
 
 @app.route('/marcar_asistio', methods=['POST'])
+@requiere_autenticacion
 def marcar_asistio():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
@@ -396,6 +430,7 @@ def marcar_asistio():
     return redirect('/')
 
 @app.route('/marcar_no_asistio', methods=['POST'])
+@requiere_autenticacion
 def marcar_no_asistio():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
@@ -429,6 +464,7 @@ def marcar_no_asistio():
     return redirect('/')
 
 @app.route('/llamada_hecha', methods=['POST'])
+@requiere_autenticacion
 def llamada_hecha():
     llamada_id = request.form.get('llamada_id')
     llamada = Llamada.query.get(llamada_id)
@@ -460,6 +496,7 @@ def llamada_hecha():
     return redirect('/')
 
 @app.route('/quitar_llamada', methods=['POST'])
+@requiere_autenticacion
 def quitar_llamada():
     llamada_id = request.form.get('llamada_id')
     llamada = Llamada.query.get(llamada_id)
@@ -473,6 +510,7 @@ def quitar_llamada():
 # ─── Calendario semanal ───────────────────────────────────────────────────────
 
 @app.route('/calendario')
+@requiere_autenticacion
 def calendario():
     inicio_str = request.args.get('inicio')
     inicio = None
@@ -519,6 +557,7 @@ def calendario():
     )
 
 @app.route('/responder', methods=['POST'])
+@requiere_autenticacion
 def responder():
     numero = request.form.get('numero')
     mensaje_texto = request.form.get('mensaje')
@@ -537,6 +576,7 @@ def responder():
     return redirect('/')
 
 @app.route('/finalizar', methods=['POST'])
+@requiere_autenticacion
 def finalizar():
     numero = request.form.get('numero')
 
