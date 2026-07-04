@@ -308,10 +308,12 @@ def recibir_mensajes(req):
                 texto = mensaje["text"]["body"].strip()
 
                 if texto == "1":
-                    enviar_horario(numero)
+                    enviar_video_tutorial(numero)
                 elif texto == "2":
-                    enviar_ayuda_personalizada(numero)
+                    enviar_horario(numero)
                 elif texto == "3":
+                    enviar_ayuda_personalizada(numero)
+                elif texto == "4":
                     manejar_punto_cita(numero, numero_normalizado)
                 elif texto == "0":
                     enviar_menu(numero)
@@ -353,7 +355,7 @@ def enviar_recordatorios():
             f"La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
             f"⚠️ Recuerda que no es posible reagendar tu cita. Si por "
             f"alguna razón no puedes asistir, deberás cancelarla desde "
-            f"la opción 3️⃣ *Mi cita* del menú y ponerte en contacto "
+            f"la opción 4️⃣ *Mi cita* del menú y ponerte en contacto "
             f"con uno de nuestros especialistas para programar una nueva.\n\n"
             f"¡Te esperamos! 😊"
         )
@@ -406,7 +408,7 @@ def confirmar_cita():
             f"agendar una nueva.\n\n"
             f"🔓 Ahora tienes acceso a tu seguimiento de cita. Si "
             f"deseas ver los detalles de tu cita o cancelarla, escribe "
-            f"*3* en cualquier momento.\n\n"
+            f"*4* en cualquier momento.\n\n"
             f"➡️ Escribe *0* para volver al menú principal, o escribe "
             f"directamente el número de otra opción que te interese. 😊"
         )
@@ -442,7 +444,7 @@ def rechazar_solicitud():
             "especialistas.\n\n"
             "Si deseas agendar una cita, te invitamos a comunicarte "
             "primero con nosotros a través de la opción "
-            "2️⃣ *Ayuda personalizada*, donde uno de nuestros "
+            "3️⃣ *Ayuda personalizada*, donde uno de nuestros "
             "especialistas podrá orientarte y acordar contigo la fecha "
             "y hora más conveniente.\n\n"
             "¡Gracias por tu comprensión! 😊\n\n"
@@ -529,7 +531,7 @@ def marcar_no_asistio():
             f"Notamos que no llegaste a tu cita programada para el "
             f"{info} con *BOCA*, por lo que ha sido cancelada "
             f"automáticamente.\n\n"
-            "Si necesitas reagendar, escribe la opción 3️⃣ *Mi cita* "
+            "Si necesitas reagendar, escribe la opción 4️⃣ *Mi cita* "
             "del menú principal para hacer una nueva solicitud.\n\n"
             "¡Esperamos verte pronto! 😊\n\n"
             "➡️ Escribe *0* para volver al menú principal."
@@ -780,7 +782,7 @@ def enviar_solicitud_recibida(number):
                 "la revisará y te confirmará fecha y hora a la brevedad.\n\n"
                 "ℹ️ Recuerda que tu cita únicamente podrá ser confirmada si "
                 "previamente fue acordada con alguno de nuestros especialistas. "
-                "Puedes hacerlo a través de la opción 2️⃣ *Ayuda "
+                "Puedes hacerlo a través de la opción 3️⃣ *Ayuda "
                 "personalizada*, ya sea escribiéndonos directamente o "
                 "solicitando una llamada. Si aún no la has acordado, "
                 "nos pondremos en contacto contigo para orientarte.\n\n"
@@ -816,7 +818,7 @@ def enviar_solicitud_llamada_recibida(number):
                 "de que tu solicitud ya quedó registrada y será atendida.\n\n"
                 "💬 Si mientras tanto prefieres dejarnos un mensaje con tu "
                 "duda o necesitas algo urgente, puedes usar la opción "
-                "*Hablar con nosotros* dentro de 2️⃣ *Ayuda personalizada*.\n\n"
+                "*Hablar con nosotros* dentro de 3️⃣ *Ayuda personalizada*.\n\n"
                 "🔒 Por tu seguridad, te contactaremos únicamente desde este "
                 "mismo número de WhatsApp. Si recibes una llamada de un "
                 "número distinto que diga representarnos, te recomendamos "
@@ -971,7 +973,7 @@ def enviar_mantener_cita(number, numero_normalizado):
                     f"📆 Fecha: {cita.fecha_cita}\n"
                     f"⏰ Hora: {cita.hora_cita}\n\n"
                     f"Si en algún momento deseas cancelarla, puedes hacerlo "
-                    f"desde la opción 3️⃣ *Mi cita* del menú principal. "
+                    f"desde la opción 4️⃣ *Mi cita* del menú principal. "
                     f"Recuerda hacerlo con la mayor anticipación posible.\n\n"
                     f"¡Te esperamos en *BOCA*! 😊\n\n"
                     f"➡️ Escribe *0* para volver al menú principal, o escribe "
@@ -1002,7 +1004,7 @@ def confirmar_cancelacion(number, numero_normalizado):
                 "body": (
                     "✅ *Tu cita ha sido cancelada exitosamente*\n\n"
                     "Si deseas agendar una nueva cita, puedes volver a "
-                    "seleccionar la opción 3️⃣ *Mi cita* del menú, o bien "
+                    "seleccionar la opción 4️⃣ *Mi cita* del menú, o bien "
                     "contactarte directamente con uno de nuestros "
                     "especialistas para acordar una nueva fecha.\n\n"
                     "¡Que tengas un excelente día! 😊\n\n"
@@ -1039,9 +1041,10 @@ def enviar_bienvenida(number):
                 "Soy el asistente virtual del consultorio. Estoy aquí para "
                 "ayudarte en lo que necesites. 😊\n\n"
                 "Elige una opción escribiendo el número:\n\n"
-                "1️⃣ Horario de atención\n"
-                "2️⃣ Ayuda personalizada\n"
-                "3️⃣ Mi cita\n\n"
+                "1️⃣ Video tutorial (recomendado)\n"
+                "2️⃣ Horario de atención\n"
+                "3️⃣ Ayuda personalizada\n"
+                "4️⃣ Mi cita\n\n"
                 "Escribe el número de la opción que te interese."
             )
         }
@@ -1059,14 +1062,63 @@ def enviar_menu(number):
             "preview_url": False,
             "body": (
                 "📋 *Menú principal*\n\n"
-                "1️⃣ Horario de atención\n"
-                "2️⃣ Ayuda personalizada\n"
-                "3️⃣ Mi cita\n\n"
+                "1️⃣ Video tutorial (recomendado)\n"
+                "2️⃣ Horario de atención\n"
+                "3️⃣ Ayuda personalizada\n"
+                "4️⃣ Mi cita\n\n"
                 "Escribe el número de la opción que te interese."
             )
         }
     }
     enviar_payload(data)
+
+def enviar_video_tutorial(number):
+    number = normalizar_numero_mx(number)
+    video_url = os.environ.get('VIDEO_TUTORIAL_URL')
+
+    texto_explicativo = (
+        "🎥 *Video tutorial (recomendado)*\n\n"
+        "Hemos preparado este video para que puedas familiarizarte "
+        "con nuestro chatbot y aprender a usarlo sin ningún "
+        "problema.\n\n"
+        "Lo creamos pensando en tu comodidad y en agilizar cada "
+        "proceso, para que puedas resolver tus dudas, agendar tu "
+        "cita o contactarnos de la forma más sencilla posible. 😊\n\n"
+        "➡️ Escribe *0* para volver al menú principal, o escribe "
+        "directamente el número de otra opción que te interese."
+    )
+
+    if video_url:
+        data_video = {
+            "messaging_product": "whatsapp",
+            "to": number,
+            "type": "video",
+            "video": {
+                "link": video_url,
+                "caption": texto_explicativo
+            }
+        }
+        enviar_payload(data_video)
+    else:
+        data_sin_video = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": number,
+            "type": "text",
+            "text": {
+                "preview_url": False,
+                "body": (
+                    "🎥 *Video tutorial*\n\n"
+                    "Estamos preparando este video con mucho cariño para "
+                    "ayudarte a usar nuestro chatbot con mayor facilidad. "
+                    "Muy pronto estará disponible aquí mismo. "
+                    "¡Gracias por tu paciencia! 😊\n\n"
+                    "➡️ Escribe *0* para volver al menú principal, o escribe "
+                    "directamente el número de otra opción que te interese."
+                )
+            }
+        }
+        enviar_payload(data_sin_video)
 
 def enviar_horario(number):
     number = normalizar_numero_mx(number)
@@ -1082,7 +1134,7 @@ def enviar_horario(number):
                 "📅 Lunes a Viernes\n"
                 "⏰ 10:00 am – 7:00 pm\n\n"
                 "ℹ️ Fuera de este horario, las opciones de *Ayuda "
-                "personalizada* (2️⃣) y *Mi cita* (3️⃣) podrían no tener "
+                "personalizada* (3️⃣) y *Mi cita* (4️⃣) podrían no tener "
                 "respuesta inmediata, ya que nuestro equipo no estará "
                 "disponible para contestar en ese momento.\n\n"
                 "➡️ Escribe *0* para volver al menú principal, o escribe "
@@ -1107,7 +1159,7 @@ def enviar_ayuda_personalizada(number):
                     "Cuéntanos cómo prefieres que te ayudemos:\n\n"
                     "ℹ️ Si nos escribes fuera de nuestro horario de "
                     "atención, es posible que tu mensaje no sea respondido "
-                    "de inmediato. Te invitamos a revisar el punto 1️⃣ para "
+                    "de inmediato. Te invitamos a revisar el punto 2️⃣ para "
                     "conocer nuestros horarios."
                 )
             },
