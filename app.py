@@ -151,6 +151,13 @@ def obtener_cita_activa(numero):
 GOOGLE_CREDENTIALS_PATH = '/etc/secrets/google-credentials.json'
 GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'bocalapaz@gmail.com')
 
+# IDs de color oficiales de Google Calendar (mismo esquema que el panel):
+# azul = cita confirmada, verde = asistió, gris = no vino, rojo = cancelada
+COLOR_CALENDAR_CONFIRMADA = '9'   # Blueberry (azul)
+COLOR_CALENDAR_ASISTIO = '10'     # Basil (verde)
+COLOR_CALENDAR_NO_ASISTIO = '8'   # Graphite (gris)
+COLOR_CALENDAR_CANCELADA = '11'   # Tomato (rojo)
+
 def obtener_servicio_calendar():
     if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
         return None
@@ -175,7 +182,7 @@ def crear_evento_calendar(cita):
         fin = inicio + timedelta(hours=1)
 
         evento = {
-            'summary': f'Cita BOCA - {cita.nombre or "Paciente"}',
+            'summary': cita.nombre or "Paciente",
             'description': (
                 f'Paciente: {cita.nombre or "Sin nombre"}\n'
                 f'Teléfono: {cita.numero}'
@@ -186,6 +193,7 @@ def crear_evento_calendar(cita):
             ),
             'start': {'dateTime': inicio.isoformat()},
             'end': {'dateTime': fin.isoformat()},
+            'colorId': COLOR_CALENDAR_CONFIRMADA,
         }
         resultado = servicio.events().insert(
             calendarId=GOOGLE_CALENDAR_ID, body=evento
@@ -195,6 +203,24 @@ def crear_evento_calendar(cita):
     except Exception as e:
         agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}")
         return None
+
+def actualizar_color_evento_calendar(google_event_id, color_id):
+    """Cambia el color del evento sin borrarlo, para reflejar el estado
+    de la cita (asistió, no vino, cancelada) igual que en el panel."""
+    if not google_event_id:
+        return
+    servicio = obtener_servicio_calendar()
+    if not servicio:
+        return
+    try:
+        servicio.events().patch(
+            calendarId=GOOGLE_CALENDAR_ID,
+            eventId=google_event_id,
+            body={'colorId': color_id}
+        ).execute()
+        agregar_mensajes_log(f"CALENDAR: color actualizado -> {google_event_id} ({color_id})")
+    except Exception as e:
+        agregar_mensajes_log(f"Error Google Calendar (actualizar color): {str(e)}")
 
 def eliminar_evento_calendar(google_event_id):
     if not google_event_id:
@@ -469,7 +495,7 @@ def cancelar_cita_admin():
         info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha asignada"
         nombre = cita.nombre or "paciente"
         numero = cita.numero
-        eliminar_evento_calendar(cita.google_event_id)
+        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_CANCELADA)
         cita.estado = "cancelada"
         db.session.commit()
         agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {numero} | {nombre} | Cita del {info}")
@@ -504,6 +530,7 @@ def marcar_asistio():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
     if cita:
+        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_ASISTIO)
         cita.estado = "asistio"
         db.session.commit()
         agregar_mensajes_log(f"CITA ASISTIDA -> {cita.numero} | {cita.nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
@@ -519,7 +546,7 @@ def marcar_no_asistio():
         numero = cita.numero
         nombre = cita.nombre or "paciente"
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
-        eliminar_evento_calendar(cita.google_event_id)
+        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_NO_ASISTIO)
         cita.estado = "no_asistio"
         db.session.commit()
         agregar_mensajes_log(f"CITA NO ASISTIDA -> {numero} | {nombre} | Cita del {info}")
@@ -1022,7 +1049,7 @@ def confirmar_cancelacion(number, numero_normalizado):
     if cita:
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
         nombre = cita.nombre or "paciente"
-        eliminar_evento_calendar(cita.google_event_id)
+        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_CANCELADA)
         cita.estado = "cancelada"
         db.session.commit()
         agregar_mensajes_log(f"CITA CANCELADA -> {numero_normalizado} | {nombre} | Cita del {info}")
