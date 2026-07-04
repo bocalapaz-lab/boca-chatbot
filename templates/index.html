@@ -68,7 +68,10 @@
         <div class="nombre">👤 {{ cita.nombre or 'Sin nombre' }}</div>
         <div class="desde">Solicitó cita el: {{ cita.creada_en.strftime('%d/%m/%Y a las %H:%M') }}</div>
 
-        <form action="/confirmar_cita" method="POST">
+        <form action="/confirmar_cita" method="POST"
+              data-nombre="{{ cita.nombre or 'Sin nombre' }}"
+              data-numero="{{ cita.numero }}"
+              onsubmit="return confirmarDatosCita(this);">
             <input type="hidden" name="cita_id" value="{{ cita.id }}">
             <div class="form-inline">
                 <div class="form-group">
@@ -194,6 +197,23 @@
 </body>
 
 <script>
+    // Antes de confirmar una cita, muestra los datos completos
+    // (nombre, número, fecha y hora) para que puedas revisarlos
+    // y evitar equivocarte al capturarlos.
+    function confirmarDatosCita(form) {
+        var nombre = form.dataset.nombre;
+        var numero = form.dataset.numero;
+        var fecha = form.querySelector('input[name="fecha"]').value;
+        var hora = form.querySelector('input[name="hora"]').value;
+        var mensaje =
+            "¿Confirmas estos datos de la cita?\n\n" +
+            "👤 Nombre: " + nombre + "\n" +
+            "📱 Número: " + numero + "\n" +
+            "📅 Fecha: " + fecha + "\n" +
+            "⏰ Hora: " + hora;
+        return confirm(mensaje);
+    }
+
     // Actualiza la página automáticamente cada 30 segundos, para ver
     // solicitudes y mensajes nuevos sin tener que refrescar a mano.
     // Se PAUSA si el usuario está escribiendo en un textarea o input,
