@@ -192,4 +192,21 @@
 </table>
 
 </body>
+
+<script>
+    // Actualiza la página automáticamente cada 30 segundos, para ver
+    // solicitudes y mensajes nuevos sin tener que refrescar a mano.
+    // Se PAUSA si el usuario está escribiendo en un textarea o input,
+    // para no borrar una respuesta a medio escribir.
+    setInterval(function () {
+        var elementoActivo = document.activeElement;
+        var estaEscribiendo = elementoActivo && (
+            elementoActivo.tagName === 'TEXTAREA' ||
+            (elementoActivo.tagName === 'INPUT' && elementoActivo.type === 'text')
+        );
+        if (!estaEscribiendo) {
+            window.location.reload();
+        }
+    }, 30000);
+</script>
 </html>
