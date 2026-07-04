@@ -378,8 +378,8 @@ def enviar_recordatorios():
 @requiere_autenticacion
 def confirmar_cita():
     cita_id = request.form.get('cita_id')
-    fecha = request.form.get('fecha')
-    hora = request.form.get('hora')
+    fecha = normalizar_fecha(request.form.get('fecha'))
+    hora = normalizar_hora(request.form.get('hora'))
 
     cita = Cita.query.get(cita_id)
     if cita and fecha and hora:
@@ -691,6 +691,41 @@ def normalizar_numero_mx(numero):
     if numero.startswith("521") and len(numero) == 13:
         return "52" + numero[3:]
     return numero
+
+def normalizar_fecha(fecha_str):
+    """Acepta 6/7/2026, 06/07/2026, 6-7-2026, etc. y siempre devuelve
+    el formato exacto DD/MM/AAAA con ceros, que es lo que usa el
+    calendario interno para hacer coincidir las citas."""
+    fecha_str = (fecha_str or '').strip()
+    for separador in ['/', '-', '.']:
+        if separador in fecha_str:
+            partes = fecha_str.split(separador)
+            if len(partes) == 3:
+                try:
+                    dia, mes, anio = partes
+                    if len(anio) == 2:
+                        anio = '20' + anio
+                    return f"{int(dia):02d}/{int(mes):02d}/{int(anio):04d}"
+                except ValueError:
+                    return fecha_str
+    return fecha_str
+
+def normalizar_hora(hora_str):
+    """Acepta 10, 10:0, 10:00, etc. y siempre devuelve HH:MM con ceros,
+    que es lo que usa el calendario interno para ubicar la cita en su
+    casilla correcta."""
+    hora_str = (hora_str or '').strip()
+    try:
+        if ':' in hora_str:
+            partes = hora_str.split(':')
+            horas = int(partes[0])
+            minutos = int(partes[1]) if len(partes) > 1 and partes[1] != '' else 0
+        else:
+            horas = int(hora_str)
+            minutos = 0
+        return f"{horas:02d}:{minutos:02d}"
+    except ValueError:
+        return hora_str
 
 def enviar_payload(data):
     data = json.dumps(data)
