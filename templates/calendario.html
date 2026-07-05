@@ -16,10 +16,13 @@
         .hora-col { background: #f0f0f0; font-weight: bold; width: 60px; position: sticky; left: 0; z-index: 1; }
         thead th.hora-col { z-index: 3; }
         .celda-vacia { color: #ddd; height: 30px; min-width: 90px; }
-        .celda-confirmada { background: #1565c0; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
-        .celda-asistio { background: #2e7d32; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
-        .celda-no-asistio { background: #757575; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
-        .celda-cancelada { background: #c62828; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
+        .celda-confirmada { background: #1565c0; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-asistio { background: #2e7d32; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-no-asistio { background: #757575; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-cancelada { background: #c62828; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .btn-borrar-registro { position: absolute; top: 1px; right: 2px; background: none; border: none; color: white; opacity: 0.7; font-size: 11px; cursor: pointer; padding: 0 2px; margin: 0; }
+        .btn-borrar-registro:hover { opacity: 1; }
+        .form-borrar { display: inline; margin: 0; padding: 0; }
         .celda-nombre { font-weight: bold; display: block; font-size: 11px; }
         .celda-hora { font-size: 10px; opacity: 0.9; }
         .leyenda { margin-top: 15px; font-size: 13px; }
@@ -62,21 +65,41 @@
                 {% for cita in citas_celda %}
                     {% if cita.estado == 'confirmada' %}
                         <div class="celda-confirmada">
+                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
+                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
+                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
+                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
+                            </form>
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
                     {% elif cita.estado == 'asistio' %}
                         <div class="celda-asistio">
+                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
+                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
+                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
+                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
+                            </form>
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
                     {% elif cita.estado == 'no_asistio' %}
                         <div class="celda-no-asistio">
+                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
+                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
+                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
+                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
+                            </form>
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
                     {% elif cita.estado == 'cancelada' %}
                         <div class="celda-cancelada">
+                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
+                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
+                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
+                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
+                            </form>
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
