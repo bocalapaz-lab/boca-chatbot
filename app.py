@@ -530,10 +530,31 @@ def marcar_asistio():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
     if cita:
+        numero = cita.numero
+        nombre = cita.nombre or "paciente"
         actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_ASISTIO)
         cita.estado = "asistio"
         db.session.commit()
-        agregar_mensajes_log(f"CITA ASISTIDA -> {cita.numero} | {cita.nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
+        agregar_mensajes_log(f"CITA ASISTIDA -> {numero} | {nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
+
+        mensaje_gracias = (
+            "🦷 *¡Gracias por tu visita!*\n\n"
+            "Fue un gusto atenderte en *BOCA*. Esperamos que te hayas "
+            "sentido cómodo durante tu consulta y te deseamos una "
+            "pronta y excelente recuperación.\n\n"
+            "Si en el futuro necesitas agendar una nueva cita o tienes "
+            "alguna duda, aquí estaremos para ayudarte con gusto.\n\n"
+            "¡Esperamos verte pronto! 😊\n\n"
+            "➡️ Escribe *0* para volver al menú principal."
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_gracias}
+        }
+        enviar_payload(data)
 
     return redirect('/')
 
@@ -640,7 +661,7 @@ def calendario():
     horas = [f"{h:02d}:00" for h in range(24)]  # Día completo, 00:00 a 23:00
 
     citas_semana = Cita.query.filter(
-        Cita.estado.in_(["confirmada", "asistio"]),
+        Cita.estado.in_(["confirmada", "asistio", "no_asistio", "cancelada"]),
         Cita.fecha_cita.in_(dias_str)
     ).all()
 
@@ -925,19 +946,13 @@ def enviar_opciones_cita(number, cita):
             "body": {
                 "text": (
                     f"📅 *Mi cita*\n\n"
-                    f"Tienes una cita confirmada con *BOCA*:\n\n"
-                    f"📆 Fecha: {cita.fecha_cita}\n"
-                    f"⏰ Hora: {cita.hora_cita}\n\n"
-                    f"¿Qué deseas hacer?"
+                    f"Ya tienes una cita confirmada con *BOCA*. Si "
+                    f"necesitas cancelarla, puedes hacerlo aquí abajo."
                 )
             },
             "footer": {"text": "Selecciona una opción"},
             "action": {
                 "buttons": [
-                    {
-                        "type": "reply",
-                        "reply": {"id": "btnvercita", "title": "Ver mi cita"}
-                    },
                     {
                         "type": "reply",
                         "reply": {"id": "btncancelarcita", "title": "Cancelar cita"}
