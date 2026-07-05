@@ -638,6 +638,24 @@ def quitar_llamada():
 
     return redirect('/')
 
+@app.route('/eliminar_registro_cita', methods=['POST'])
+@requiere_autenticacion
+def eliminar_registro_cita():
+    cita_id = request.form.get('cita_id')
+    cita = Cita.query.get(cita_id)
+    if cita:
+        info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha"
+        nombre = cita.nombre or "paciente"
+        numero = cita.numero
+        # Si por alguna razon si tenia evento en Calendar, tambien se borra
+        # para que quede completamente limpio en ambos lados.
+        eliminar_evento_calendar(cita.google_event_id)
+        db.session.delete(cita)
+        db.session.commit()
+        agregar_mensajes_log(f"REGISTRO DE CITA ELIMINADO -> {numero} | {nombre} | Cita del {info}")
+
+    return redirect(request.referrer or '/')
+
 # ─── Calendario semanal ───────────────────────────────────────────────────────
 
 @app.route('/calendario')
