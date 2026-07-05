@@ -162,7 +162,8 @@
         <div class="numero">📱 {{ conv.numero }}</div>
         <div class="nombre">👤 {{ conv.nombre or 'Sin nombre' }}</div>
         <div class="desde">Esperando desde: {{ conv.desde }}</div>
-        <form action="/responder" method="POST">
+        <form action="/responder" method="POST"
+              onsubmit="return confirm('¿Enviar esta respuesta al paciente?');">
             <input type="hidden" name="numero" value="{{ conv.numero }}">
             <textarea name="mensaje" placeholder="Escribe tu respuesta aquí..." required></textarea>
             <br>
