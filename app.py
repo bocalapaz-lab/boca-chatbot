@@ -85,12 +85,57 @@ def solicitar_autenticacion():
         {'WWW-Authenticate': 'Basic realm="Panel BOCA"'}
     )
 
+# ─── Protección contra fuerza bruta en el panel ──────────────────────────────
+# Si una misma direccion intenta entrar 5 veces seguidas sin exito, se
+# bloquea durante 15 minutos, sin importar cuantas veces lo siga
+# intentando. Se guarda en memoria (no en base de datos) porque no
+# necesita sobrevivir a un reinicio del servicio.
+
+MAX_INTENTOS_LOGIN = 5
+BLOQUEO_MINUTOS = 15
+intentos_fallidos = {}  # { ip: (cantidad_fallos, momento_del_primer_fallo) }
+
+def obtener_ip_cliente():
+    adelante = request.headers.get('X-Forwarded-For')
+    if adelante:
+        return adelante.split(',')[0].strip()
+    return request.remote_addr or 'desconocida'
+
+def ip_esta_bloqueada(ip):
+    if ip not in intentos_fallidos:
+        return False
+    cantidad, primer_fallo = intentos_fallidos[ip]
+    if cantidad < MAX_INTENTOS_LOGIN:
+        return False
+    minutos_transcurridos = (datetime.utcnow() - primer_fallo).total_seconds() / 60
+    if minutos_transcurridos >= BLOQUEO_MINUTOS:
+        intentos_fallidos.pop(ip, None)
+        return False
+    return True
+
+def registrar_intento_fallido(ip):
+    cantidad, primer_fallo = intentos_fallidos.get(ip, (0, datetime.utcnow()))
+    intentos_fallidos[ip] = (cantidad + 1, primer_fallo)
+
+def registrar_intento_exitoso(ip):
+    intentos_fallidos.pop(ip, None)
+
 def requiere_autenticacion(f):
     @wraps(f)
     def decorada(*args, **kwargs):
+        ip = obtener_ip_cliente()
+        if ip_esta_bloqueada(ip):
+            return Response(
+                f'Demasiados intentos fallidos. Por seguridad, esta '
+                f'dirección quedó bloqueada temporalmente durante '
+                f'{BLOQUEO_MINUTOS} minutos. Intenta de nuevo más tarde.',
+                429
+            )
         auth = request.authorization
         if not auth or not verificar_credenciales(auth.username, auth.password):
+            registrar_intento_fallido(ip)
             return solicitar_autenticacion()
+        registrar_intento_exitoso(ip)
         return f(*args, **kwargs)
     return decorada
 
@@ -116,6 +161,22 @@ def agregar_mensajes_log(texto):
     nuevo_registro = Log(texto=texto)
     db.session.add(nuevo_registro)
     db.session.commit()
+    limpiar_logs_viejos()
+
+def limpiar_logs_viejos():
+    """Evita que el Registro de mensajes crezca sin control. Cuando pasa
+    de 5000 registros, borra los 500 mas antiguos. Se sigue conservando
+    un historial amplio (miles de mensajes recientes)."""
+    total = Log.query.count()
+    if total > 5000:
+        a_borrar = (
+            Log.query.order_by(Log.fecha_y_hora.asc())
+            .limit(total - 5000 + 500)
+            .all()
+        )
+        for registro in a_borrar:
+            db.session.delete(registro)
+        db.session.commit()
 
 def obtener_estado(numero):
     registro = EstadoUsuario.query.get(numero)
@@ -236,8 +297,8 @@ def eliminar_evento_calendar(google_event_id):
     except Exception as e:
         agregar_mensajes_log(f"Error Google Calendar (eliminar evento): {str(e)}")
 
-TOKEN_CESAR = "cesar"
-CLAVE_RECORDATORIOS = "boca2026xK9mP3qL7nR2vT8wJ4cF6yH1"
+TOKEN_CESAR = os.environ.get('WEBHOOK_VERIFY_TOKEN')
+CLAVE_RECORDATORIOS = os.environ.get('CLAVE_RECORDATORIOS')
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -308,6 +369,10 @@ def recibir_mensajes(req):
                 borrar_estado(numero_normalizado)
                 agregar_mensajes_log(f"SOLICITUD DE LLAMADA -> {numero_normalizado} | Nombre: {nombre}")
                 enviar_solicitud_llamada_recibida(numero)
+                return jsonify({'message': 'EVENT_RECEIVED'}), 200
+
+            if estado in ("esperando_nombre_cita", "esperando_nombre_atencion", "esperando_nombre_llamada") and tipo != "text":
+                enviar_pedir_nombre_como_texto(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
             if tipo == "interactive":
@@ -656,6 +721,15 @@ def eliminar_registro_cita():
 
     return redirect(request.referrer or '/')
 
+@app.route('/descargar_backup')
+@requiere_autenticacion
+def descargar_backup():
+    from flask import send_file
+    if not os.path.isfile(DB_PATH):
+        return "No se encontró la base de datos.", 404
+    nombre_descarga = f"boca_backup_{datetime.now().strftime('%Y-%m-%d_%H%M')}.db"
+    return send_file(DB_PATH, as_attachment=True, download_name=nombre_descarga)
+
 # ─── Calendario semanal ───────────────────────────────────────────────────────
 
 @app.route('/calendario')
@@ -826,6 +900,24 @@ def enviar_pedir_nombre(number):
                 "📅 *Mi cita*\n\n"
                 "Para registrar tu solicitud de cita, por favor "
                 "escríbenos tu nombre completo. 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
+def enviar_pedir_nombre_como_texto(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "✍️ Para continuar, por favor escríbenos tu nombre "
+                "completo en un mensaje de texto (no como foto, nota "
+                "de voz u otro tipo de archivo). ¡Gracias! 😊"
             )
         }
     }
