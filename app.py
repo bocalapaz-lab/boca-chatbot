@@ -430,9 +430,8 @@ def confirmar_cita():
             f"necesitas un horario distinto, deberás cancelar esta "
             f"cita y contactarnos nuevamente con un especialista para "
             f"agendar una nueva.\n\n"
-            f"🔓 Ahora tienes acceso a tu seguimiento de cita. Si "
-            f"deseas ver los detalles de tu cita o cancelarla, escribe "
-            f"*3* en cualquier momento.\n\n"
+            f"🔓 Si en algún momento necesitas cancelar tu cita, "
+            f"escribe *3* en cualquier momento.\n\n"
             f"➡️ Escribe *0* para volver al menú principal, o escribe "
             f"directamente el número de otra opción que te interese. 😊"
         )
@@ -545,7 +544,8 @@ def marcar_asistio():
             "Si en el futuro necesitas agendar una nueva cita o tienes "
             "alguna duda, aquí estaremos para ayudarte con gusto.\n\n"
             "¡Esperamos verte pronto! 😊\n\n"
-            "➡️ Escribe *0* para volver al menú principal."
+            "➡️ Escribe *0* para volver al menú principal, o escribe "
+            "directamente el número de otra opción que te interese."
         )
         data = {
             "messaging_product": "whatsapp",
@@ -580,7 +580,8 @@ def marcar_no_asistio():
             "Si necesitas reagendar, escribe la opción 3️⃣ *Mi cita* "
             "del menú principal para hacer una nueva solicitud.\n\n"
             "¡Esperamos verte pronto! 😊\n\n"
-            "➡️ Escribe *0* para volver al menú principal."
+            "➡️ Escribe *0* para volver al menú principal, o escribe "
+            "directamente el número de otra opción que te interese."
         )
         data = {
             "messaging_product": "whatsapp",
