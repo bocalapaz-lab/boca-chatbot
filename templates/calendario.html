@@ -17,13 +17,17 @@
         thead th.hora-col { z-index: 3; }
         .celda-vacia { color: #ddd; height: 30px; min-width: 90px; }
         .celda-confirmada { background: #1565c0; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
-        .celda-asistio { background: #9e9e9e; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
+        .celda-asistio { background: #2e7d32; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
+        .celda-no-asistio { background: #757575; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
+        .celda-cancelada { background: #c62828; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; }
         .celda-nombre { font-weight: bold; display: block; font-size: 11px; }
         .celda-hora { font-size: 10px; opacity: 0.9; }
         .leyenda { margin-top: 15px; font-size: 13px; }
         .leyenda span { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
         .cuadro-confirmada { background: #1565c0; }
-        .cuadro-asistio { background: #9e9e9e; }
+        .cuadro-asistio { background: #2e7d32; }
+        .cuadro-no-asistio { background: #757575; }
+        .cuadro-cancelada { background: #c62828; }
     </style>
 </head>
 <body>
@@ -66,6 +70,16 @@
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
+                    {% elif cita.estado == 'no_asistio' %}
+                        <div class="celda-no-asistio">
+                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
+                            <span class="celda-hora">{{ cita.hora_cita }}</span>
+                        </div>
+                    {% elif cita.estado == 'cancelada' %}
+                        <div class="celda-cancelada">
+                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
+                            <span class="celda-hora">{{ cita.hora_cita }}</span>
+                        </div>
                     {% endif %}
                 {% endfor %}
             {% else %}
@@ -82,7 +96,11 @@
 <div class="leyenda">
     <span class="cuadro-confirmada"></span> Cita confirmada (pendiente de atender)
     &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-asistio"></span> Paciente ya atendido
+    <span class="cuadro-asistio"></span> Paciente atendido
+    &nbsp;&nbsp;&nbsp;
+    <span class="cuadro-no-asistio"></span> Paciente no asistió
+    &nbsp;&nbsp;&nbsp;
+    <span class="cuadro-cancelada"></span> Cita cancelada
     <br><br>
     <em>Si dos o más pacientes coinciden en la misma hora y día (por ejemplo, con distintos especialistas), todas sus citas se muestran apiladas dentro de la misma casilla.</em>
 </div>
