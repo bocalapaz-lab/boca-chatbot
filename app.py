@@ -12,7 +12,6 @@ import pytz
 
 app = Flask(__name__)
 
-# ─── Configuración de base de datos con disco persistente ───────────────────
 DISK_PATH = '/var/data'
 if os.path.isdir(DISK_PATH):
     DB_PATH = os.path.join(DISK_PATH, 'metapython.db')
@@ -54,8 +53,6 @@ class Llamada(db.Model):
 
 with app.app_context():
     db.create_all()
-    # Migración: si la base de datos ya existía de antes (con citas reales
-    # guardadas en el disco), le agrega la columna nueva sin borrar nada.
     inspector = db.inspect(db.engine)
     columnas_cita = [col['name'] for col in inspector.get_columns('cita')]
     if 'google_event_id' not in columnas_cita:
@@ -66,7 +63,6 @@ with app.app_context():
 def ordenar_por_fecha_y_hora(registros):
     return sorted(registros, key=lambda x: x.fecha_y_hora, reverse=True)
 
-# ─── Autenticación del panel web ─────────────────────────────────────────────
 def verificar_credenciales(usuario, contrasena):
     return (
         usuario == os.environ.get('PANEL_USER') and
@@ -683,6 +679,13 @@ def eliminar_registro_cita():
     cita_id = request.form.get('cita_id')
     cita = Cita.query.get(cita_id)
     if cita:
+        if cita.estado == "confirmada":
+            return (
+                "Esta cita sigue vigente (confirmada), así que no se puede "
+                "eliminar directamente para evitar que el paciente se quede "
+                "sin avisar. Si necesitas cancelarla, usa el botón "
+                "'Cancelar cita' desde el panel principal.", 400
+            )
         info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha"
         nombre = cita.nombre or "paciente"
         numero = cita.numero
