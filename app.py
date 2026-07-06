@@ -67,11 +67,6 @@ def ordenar_por_fecha_y_hora(registros):
     return sorted(registros, key=lambda x: x.fecha_y_hora, reverse=True)
 
 # ─── Autenticación del panel web ─────────────────────────────────────────────
-# Protege todas las rutas del panel (index, calendario, confirmar, cancelar,
-# etc.) con usuario y contraseña. NO se aplica a /webhook ni a
-# /enviar_recordatorios, ya que esas rutas necesitan funcionar
-# automáticamente (Meta y cron-job.org) y tienen su propia protección.
-
 def verificar_credenciales(usuario, contrasena):
     return (
         usuario == os.environ.get('PANEL_USER') and
@@ -85,15 +80,9 @@ def solicitar_autenticacion():
         {'WWW-Authenticate': 'Basic realm="Panel BOCA"'}
     )
 
-# ─── Protección contra fuerza bruta en el panel ──────────────────────────────
-# Si una misma direccion intenta entrar 5 veces seguidas sin exito, se
-# bloquea durante 15 minutos, sin importar cuantas veces lo siga
-# intentando. Se guarda en memoria (no en base de datos) porque no
-# necesita sobrevivir a un reinicio del servicio.
-
 MAX_INTENTOS_LOGIN = 5
 BLOQUEO_MINUTOS = 15
-intentos_fallidos = {}  # { ip: (cantidad_fallos, momento_del_primer_fallo) }
+intentos_fallidos = {}
 
 def obtener_ip_cliente():
     adelante = request.headers.get('X-Forwarded-For')
@@ -164,9 +153,6 @@ def agregar_mensajes_log(texto):
     limpiar_logs_viejos()
 
 def limpiar_logs_viejos():
-    """Evita que el Registro de mensajes crezca sin control. Cuando pasa
-    de 5000 registros, borra los 500 mas antiguos. Se sigue conservando
-    un historial amplio (miles de mensajes recientes)."""
     total = Log.query.count()
     if total > 5000:
         a_borrar = (
@@ -205,19 +191,13 @@ def obtener_cita_activa(numero):
         Cita.estado.in_(["pendiente", "confirmada"])
     ).first()
 
-# ─── Integración con Google Calendar ─────────────────────────────────────────
-# Si la credencial no existe o algo falla, el bot sigue funcionando normal
-# con WhatsApp; Calendar es un extra, nunca un requisito para operar.
-
 GOOGLE_CREDENTIALS_PATH = '/etc/secrets/google-credentials.json'
 GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'bocalapaz@gmail.com')
 
-# IDs de color oficiales de Google Calendar (mismo esquema que el panel):
-# azul = cita confirmada, verde = asistió, gris = no vino, rojo = cancelada
-COLOR_CALENDAR_CONFIRMADA = '9'   # Blueberry (azul)
-COLOR_CALENDAR_ASISTIO = '10'     # Basil (verde)
-COLOR_CALENDAR_NO_ASISTIO = '8'   # Graphite (gris)
-COLOR_CALENDAR_CANCELADA = '11'   # Tomato (rojo)
+COLOR_CALENDAR_CONFIRMADA = '9'
+COLOR_CALENDAR_ASISTIO = '10'
+COLOR_CALENDAR_NO_ASISTIO = '8'
+COLOR_CALENDAR_CANCELADA = '11'
 
 def obtener_servicio_calendar():
     if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
@@ -266,8 +246,6 @@ def crear_evento_calendar(cita):
         return None
 
 def actualizar_color_evento_calendar(google_event_id, color_id):
-    """Cambia el color del evento sin borrarlo, para reflejar el estado
-    de la cita (asistió, no vino, cancelada) igual que en el panel."""
     if not google_event_id:
         return
     servicio = obtener_servicio_calendar()
@@ -417,8 +395,6 @@ def recibir_mensajes(req):
         agregar_mensajes_log(f"Error: {str(e)}")
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-# ─── Ruta de recordatorios automaticos ───────────────────────────────────────
-
 @app.route('/enviar_recordatorios', methods=['GET'])
 def enviar_recordatorios():
     clave = request.args.get('clave')
@@ -436,24 +412,24 @@ def enviar_recordatorios():
 
     enviados = 0
     for cita in citas_hoy:
-        mensaje_recordatorio = (
-            f"🦷 *¡Buenos días!* Hoy es el día de tu cita con *BOCA* "
-            f"a las {cita.hora_cita}.\n\n"
-            f"📍 Te esperamos en:\n"
-            f"Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V,\n"
-            f"La Paz, 72160, Heroica Puebla de Zaragoza, Pue.\n\n"
-            f"⚠️ Recuerda que no es posible reagendar tu cita. Si por "
-            f"alguna razón no puedes asistir, deberás cancelarla desde "
-            f"la opción 3️⃣ *Mi cita* del menú y ponerte en contacto "
-            f"con uno de nuestros especialistas para programar una nueva.\n\n"
-            f"¡Te esperamos! 😊"
-        )
+        nombre_paciente = cita.nombre or "paciente"
         data = {
             "messaging_product": "whatsapp",
-            "recipient_type": "individual",
             "to": cita.numero,
-            "type": "text",
-            "text": {"preview_url": False, "body": mensaje_recordatorio}
+            "type": "template",
+            "template": {
+                "name": "recordatorio_cita_boca",
+                "language": {"code": "es_MX"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": nombre_paciente},
+                            {"type": "text", "text": cita.hora_cita}
+                        ]
+                    }
+                ]
+            }
         }
         enviar_payload(data)
         cita.recordatorio_enviado = True
@@ -462,8 +438,6 @@ def enviar_recordatorios():
         enviados += 1
 
     return jsonify({'mensaje': f'Recordatorios enviados: {enviados}', 'fecha': hoy}), 200
-
-# ─── Rutas del panel web ──────────────────────────────────────────────────────
 
 @app.route('/confirmar_cita', methods=['POST'])
 @requiere_autenticacion
@@ -712,8 +686,6 @@ def eliminar_registro_cita():
         info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha"
         nombre = cita.nombre or "paciente"
         numero = cita.numero
-        # Si por alguna razon si tenia evento en Calendar, tambien se borra
-        # para que quede completamente limpio en ambos lados.
         eliminar_evento_calendar(cita.google_event_id)
         db.session.delete(cita)
         db.session.commit()
@@ -730,8 +702,6 @@ def descargar_backup():
     nombre_descarga = f"boca_backup_{datetime.now().strftime('%Y-%m-%d_%H%M')}.db"
     return send_file(DB_PATH, as_attachment=True, download_name=nombre_descarga)
 
-# ─── Calendario semanal ───────────────────────────────────────────────────────
-
 @app.route('/calendario')
 @requiere_autenticacion
 def calendario():
@@ -746,12 +716,12 @@ def calendario():
     if not inicio:
         zona_mexico = pytz.timezone('America/Mexico_City')
         hoy = datetime.now(zona_mexico).date()
-        inicio = hoy - timedelta(days=hoy.weekday())  # Lunes de esta semana
+        inicio = hoy - timedelta(days=hoy.weekday())
 
-    dias = [inicio + timedelta(days=i) for i in range(7)]  # Semana completa
+    dias = [inicio + timedelta(days=i) for i in range(7)]
     dias_str = [d.strftime('%d/%m/%Y') for d in dias]
 
-    horas = [f"{h:02d}:00" for h in range(24)]  # Día completo, 00:00 a 23:00
+    horas = [f"{h:02d}:00" for h in range(24)]
 
     citas_semana = Cita.query.filter(
         Cita.estado.in_(["confirmada", "asistio", "no_asistio", "cancelada"]),
@@ -834,9 +804,6 @@ def normalizar_numero_mx(numero):
     return numero
 
 def normalizar_fecha(fecha_str):
-    """Acepta 6/7/2026, 06/07/2026, 6-7-2026, etc. y siempre devuelve
-    el formato exacto DD/MM/AAAA con ceros, que es lo que usa el
-    calendario interno para hacer coincidir las citas."""
     fecha_str = (fecha_str or '').strip()
     for separador in ['/', '-', '.']:
         if separador in fecha_str:
@@ -852,9 +819,6 @@ def normalizar_fecha(fecha_str):
     return fecha_str
 
 def normalizar_hora(hora_str):
-    """Acepta 10, 10:0, 10:00, etc. y siempre devuelve HH:MM con ceros,
-    que es lo que usa el calendario interno para ubicar la cita en su
-    casilla correcta."""
     hora_str = (hora_str or '').strip()
     try:
         if ':' in hora_str:
@@ -884,8 +848,6 @@ def enviar_payload(data):
         agregar_mensajes_log(f"Error de conexion: {str(e)}")
     finally:
         connection.close()
-
-# ─── Funciones de citas ───────────────────────────────────────────────────────
 
 def enviar_pedir_nombre(number):
     number = normalizar_numero_mx(number)
@@ -1200,8 +1162,6 @@ def confirmar_cancelacion(number, numero_normalizado):
             }
         }
         enviar_payload(data)
-
-# ─── Funciones generales del bot ─────────────────────────────────────────────
 
 def enviar_bienvenida(number):
     number = normalizar_numero_mx(number)
