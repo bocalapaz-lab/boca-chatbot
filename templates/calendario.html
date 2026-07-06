@@ -65,11 +65,6 @@
                 {% for cita in citas_celda %}
                     {% if cita.estado == 'confirmada' %}
                         <div class="celda-confirmada">
-                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
-                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
-                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
-                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
-                            </form>
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
