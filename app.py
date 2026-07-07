@@ -323,19 +323,23 @@ def recibir_mensajes(req):
         changes = entry['changes'][0]
         value = changes['value']
 
+        # Meta manda avisos de "estado de entrega" por separado de los
+        # mensajes entrantes. Solo registramos cuando algo FALLA (sent,
+        # delivered y read no aportan nada util y solo llenan el registro).
         estados = value.get('statuses')
         if estados:
             for estado in estados:
-                info_estado = f"ESTADO DE MENSAJE -> id: {estado.get('id')} | status: {estado.get('status')}"
-                errores = estado.get('errors')
-                if errores:
-                    for error in errores:
-                        info_estado += (
-                            f" | ERROR codigo: {error.get('code')} "
-                            f"titulo: {error.get('title')} "
-                            f"detalle: {error.get('error_data', {}).get('details')}"
-                        )
-                agregar_mensajes_log(info_estado)
+                if estado.get('status') == 'failed':
+                    info_estado = f"ESTADO DE MENSAJE -> id: {estado.get('id')} | status: failed"
+                    errores = estado.get('errors')
+                    if errores:
+                        for error in errores:
+                            info_estado += (
+                                f" | ERROR codigo: {error.get('code')} "
+                                f"titulo: {error.get('title')} "
+                                f"detalle: {error.get('error_data', {}).get('details')}"
+                            )
+                    agregar_mensajes_log(info_estado)
 
         objeto_mensaje = value.get('messages')
 
@@ -1300,37 +1304,52 @@ def enviar_guia_uso(number):
         time.sleep(1.5)
 
     if pdf_url:
+        if audio_url:
+            texto_pdf = (
+                "📋 *Guía de uso del chatbot*\n\n"
+                "Para tu comodidad y para que puedas usar nuestro chatbot "
+                "con mayor facilidad, aquí tienes esta guía en PDF, junto "
+                "con el audio que ya recibiste. Ambos te explican de forma "
+                "general su funcionamiento. 😊\n\n"
+                "➡️ Escribe *0* para volver al menú principal, o escribe "
+                "directamente el número de otra opción que te interese."
+            )
+        else:
+            texto_pdf = (
+                "📋 *Guía de uso del chatbot*\n\n"
+                "Para tu comodidad y para que puedas usar nuestro chatbot "
+                "con mayor facilidad, aquí tienes esta guía en PDF, que te "
+                "explica de forma general su funcionamiento. 😊\n\n"
+                "➡️ Escribe *0* para volver al menú principal, o escribe "
+                "directamente el número de otra opción que te interese."
+            )
         data_pdf = {
             "messaging_product": "whatsapp",
             "to": number,
             "type": "document",
             "document": {
                 "link": pdf_url,
-                "filename": "Guia_de_uso_BOCA.pdf"
+                "filename": "Guia_de_uso_BOCA.pdf",
+                "caption": texto_pdf
             }
         }
         enviar_payload(data_pdf)
-        time.sleep(1.5)
-
-    data_texto = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": number,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "📋 *Guía de uso del chatbot*\n\n"
-                "Aquí tienes un audio explicándote cómo usar nuestro "
-                "asistente, junto con esta guía en PDF con capturas "
-                "de pantalla paso a paso, para que la tengas siempre "
-                "a la mano. 😊\n\n"
-                "➡️ Escribe *0* para volver al menú principal, o escribe "
-                "directamente el número de otra opción que te interese."
-            )
+    elif audio_url:
+        data_cierre = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": number,
+            "type": "text",
+            "text": {
+                "preview_url": False,
+                "body": (
+                    "➡️ Escribe *0* para volver al menú principal, o "
+                    "escribe directamente el número de otra opción que "
+                    "te interese. 😊"
+                )
+            }
         }
-    }
-    enviar_payload(data_texto)
+        enviar_payload(data_cierre)
 
 def enviar_ayuda_personalizada(number):
     number = normalizar_numero_mx(number)
