@@ -100,7 +100,35 @@ def ip_esta_bloqueada(ip):
 
 def registrar_intento_fallido(ip):
     cantidad, primer_fallo = intentos_fallidos.get(ip, (0, datetime.utcnow()))
-    intentos_fallidos[ip] = (cantidad + 1, primer_fallo)
+    cantidad += 1
+    intentos_fallidos[ip] = (cantidad, primer_fallo)
+    if cantidad == MAX_INTENTOS_LOGIN:
+        enviar_alerta_seguridad(ip)
+
+def enviar_alerta_seguridad(ip):
+    numero_admin = os.environ.get('ADMIN_WHATSAPP_NUMBER')
+    if not numero_admin:
+        return
+    zona_mexico = pytz.timezone('America/Mexico_City')
+    hora_actual = datetime.now(zona_mexico).strftime('%d/%m/%Y a las %H:%M')
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": numero_admin,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "🔒 *Alerta de seguridad - Panel BOCA*\n\n"
+                "Se detectaron 5 intentos fallidos de inicio de sesión "
+                f"en tu panel el {hora_actual}.\n\n"
+                "Esa dirección quedó bloqueada automáticamente durante "
+                "15 minutos. Si no fuiste tú, no necesitas hacer nada más "
+                "por ahora, pero te lo avisamos para que estés al tanto."
+            )
+        }
+    }
+    enviar_payload(data)
 
 def registrar_intento_exitoso(ip):
     intentos_fallidos.pop(ip, None)
@@ -373,7 +401,7 @@ def recibir_mensajes(req):
                 texto = mensaje["text"]["body"].strip()
 
                 if texto == "1":
-                    enviar_video_tutorial(numero)
+                    enviar_guia_uso(numero)
                 elif texto == "2":
                     enviar_ayuda_personalizada(numero)
                 elif texto == "3":
@@ -1190,7 +1218,7 @@ def enviar_bienvenida(number):
                 "Soy el asistente virtual del consultorio. Estoy aquí para "
                 "ayudarte en lo que necesites. 😊\n\n"
                 "Elige una opción escribiendo el número:\n\n"
-                "1️⃣ Video tutorial (recomendado)\n"
+                "1️⃣ Guía de uso del chatbot (recomendado)\n"
                 "2️⃣ Ayuda personalizada\n"
                 "3️⃣ Mi cita\n\n"
                 "Escribe el número de la opción que te interese."
@@ -1210,7 +1238,7 @@ def enviar_menu(number):
             "preview_url": False,
             "body": (
                 "📋 *Menú principal*\n\n"
-                "1️⃣ Video tutorial (recomendado)\n"
+                "1️⃣ Guía de uso del chatbot (recomendado)\n"
                 "2️⃣ Ayuda personalizada\n"
                 "3️⃣ Mi cita\n\n"
                 "Escribe el número de la opción que te interese."
@@ -1219,35 +1247,13 @@ def enviar_menu(number):
     }
     enviar_payload(data)
 
-def enviar_video_tutorial(number):
+def enviar_guia_uso(number):
     number = normalizar_numero_mx(number)
-    video_url = os.environ.get('VIDEO_TUTORIAL_URL')
+    audio_url = os.environ.get('AUDIO_GUIA_URL')
+    pdf_url = os.environ.get('PDF_GUIA_URL')
 
-    texto_explicativo = (
-        "🎥 *Video tutorial (recomendado)*\n\n"
-        "Hemos preparado este video para que puedas familiarizarte "
-        "con nuestro chatbot y aprender a usarlo sin ningún "
-        "problema.\n\n"
-        "Lo creamos pensando en tu comodidad y en agilizar cada "
-        "proceso, para que puedas resolver tus dudas, agendar tu "
-        "cita o contactarnos de la forma más sencilla posible. 😊\n\n"
-        "➡️ Escribe *0* para volver al menú principal, o escribe "
-        "directamente el número de otra opción que te interese."
-    )
-
-    if video_url:
-        data_video = {
-            "messaging_product": "whatsapp",
-            "to": number,
-            "type": "video",
-            "video": {
-                "link": video_url,
-                "caption": texto_explicativo
-            }
-        }
-        enviar_payload(data_video)
-    else:
-        data_sin_video = {
+    if not audio_url and not pdf_url:
+        data_sin_guia = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": number,
@@ -1255,8 +1261,8 @@ def enviar_video_tutorial(number):
             "text": {
                 "preview_url": False,
                 "body": (
-                    "🎥 *Video tutorial*\n\n"
-                    "Estamos preparando este video con mucho cariño para "
+                    "📋 *Guía de uso del chatbot*\n\n"
+                    "Estamos preparando esta guía con mucho cariño para "
                     "ayudarte a usar nuestro chatbot con mayor facilidad. "
                     "Muy pronto estará disponible aquí mismo. "
                     "¡Gracias por tu paciencia! 😊\n\n"
@@ -1265,7 +1271,39 @@ def enviar_video_tutorial(number):
                 )
             }
         }
-        enviar_payload(data_sin_video)
+        enviar_payload(data_sin_guia)
+        return
+
+    if audio_url:
+        data_audio = {
+            "messaging_product": "whatsapp",
+            "to": number,
+            "type": "audio",
+            "audio": {"link": audio_url}
+        }
+        enviar_payload(data_audio)
+        time.sleep(1.5)
+
+    if pdf_url:
+        data_pdf = {
+            "messaging_product": "whatsapp",
+            "to": number,
+            "type": "document",
+            "document": {
+                "link": pdf_url,
+                "filename": "Guia_de_uso_BOCA.pdf",
+                "caption": (
+                    "📋 *Guía de uso del chatbot*\n\n"
+                    "Aquí tienes un audio explicándote cómo usar nuestro "
+                    "asistente, junto con esta guía en PDF con capturas "
+                    "de pantalla paso a paso, para que la tengas siempre "
+                    "a la mano. 😊\n\n"
+                    "➡️ Escribe *0* para volver al menú principal, o escribe "
+                    "directamente el número de otra opción que te interese."
+                )
+            }
+        }
+        enviar_payload(data_pdf)
 
 def enviar_ayuda_personalizada(number):
     number = normalizar_numero_mx(number)
