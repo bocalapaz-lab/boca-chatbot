@@ -76,7 +76,7 @@ def solicitar_autenticacion():
         {'WWW-Authenticate': 'Basic realm="Panel BOCA"'}
     )
 
-MAX_INTENTOS_LOGIN = 5
+MAX_INTENTOS_LOGIN = 3
 BLOQUEO_MINUTOS = 15
 intentos_fallidos = {}
 
@@ -120,7 +120,7 @@ def enviar_alerta_seguridad(ip):
             "preview_url": False,
             "body": (
                 "🔒 *Alerta de seguridad - Panel BOCA*\n\n"
-                "Se detectaron 5 intentos fallidos de inicio de sesión "
+                "Se detectaron 3 intentos fallidos de inicio de sesión "
                 f"en tu panel el {hora_actual}.\n\n"
                 "Esa dirección quedó bloqueada automáticamente durante "
                 "15 minutos. Si no fuiste tú, no necesitas hacer nada más "
@@ -322,6 +322,21 @@ def recibir_mensajes(req):
         entry = data['entry'][0]
         changes = entry['changes'][0]
         value = changes['value']
+
+        estados = value.get('statuses')
+        if estados:
+            for estado in estados:
+                info_estado = f"ESTADO DE MENSAJE -> id: {estado.get('id')} | status: {estado.get('status')}"
+                errores = estado.get('errors')
+                if errores:
+                    for error in errores:
+                        info_estado += (
+                            f" | ERROR codigo: {error.get('code')} "
+                            f"titulo: {error.get('title')} "
+                            f"detalle: {error.get('error_data', {}).get('details')}"
+                        )
+                agregar_mensajes_log(info_estado)
+
         objeto_mensaje = value.get('messages')
 
         if objeto_mensaje:
