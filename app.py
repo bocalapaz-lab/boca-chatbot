@@ -1291,19 +1291,31 @@ def enviar_guia_uso(number):
             "type": "document",
             "document": {
                 "link": pdf_url,
-                "filename": "Guia_de_uso_BOCA.pdf",
-                "caption": (
-                    "📋 *Guía de uso del chatbot*\n\n"
-                    "Aquí tienes un audio explicándote cómo usar nuestro "
-                    "asistente, junto con esta guía en PDF con capturas "
-                    "de pantalla paso a paso, para que la tengas siempre "
-                    "a la mano. 😊\n\n"
-                    "➡️ Escribe *0* para volver al menú principal, o escribe "
-                    "directamente el número de otra opción que te interese."
-                )
+                "filename": "Guia_de_uso_BOCA.pdf"
             }
         }
         enviar_payload(data_pdf)
+        time.sleep(1.5)
+
+    data_texto = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "📋 *Guía de uso del chatbot*\n\n"
+                "Aquí tienes un audio explicándote cómo usar nuestro "
+                "asistente, junto con esta guía en PDF con capturas "
+                "de pantalla paso a paso, para que la tengas siempre "
+                "a la mano. 😊\n\n"
+                "➡️ Escribe *0* para volver al menú principal, o escribe "
+                "directamente el número de otra opción que te interese."
+            )
+        }
+    }
+    enviar_payload(data_texto)
 
 def enviar_ayuda_personalizada(number):
     number = normalizar_numero_mx(number)
