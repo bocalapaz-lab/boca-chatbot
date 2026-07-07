@@ -461,7 +461,7 @@ def enviar_recordatorios():
             "to": cita.numero,
             "type": "template",
             "template": {
-                "name": "recordatorio_cita_boca",
+                "name": "recordatorio_cita_boca_v2",
                 "language": {"code": "es_MX"},
                 "components": [
                     {
