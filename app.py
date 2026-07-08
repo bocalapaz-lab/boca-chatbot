@@ -192,19 +192,6 @@ def registro_tecnico():
     registros_ordenados = ordenar_por_fecha_y_hora(registros)
     return render_template('registro_tecnico.html', registros=registros_ordenados)
 
-@app.route('/reclasificar_logs_viejos')
-@requiere_autenticacion
-def reclasificar_logs_viejos():
-    prefijos_tecnicos = ('{', 'WhatsApp API ->', 'Error', 'ESTADO DE MENSAJE')
-    registros = Log.query.filter_by(es_tecnico=False).all()
-    contador = 0
-    for registro in registros:
-        if registro.texto and registro.texto.strip().startswith(prefijos_tecnicos):
-            registro.es_tecnico = True
-            contador += 1
-    db.session.commit()
-    return f"Listo, se reclasificaron {contador} registros como técnicos."
-
 # Límites de almacenamiento del registro, separados por tipo para que el
 # ruido técnico (mucho más frecuente) no desplace a los mensajes de
 # negocio antes de tiempo. Cada uno se limpia de forma independiente.
@@ -263,7 +250,7 @@ def obtener_cita_activa(numero):
     ).first()
 
 GOOGLE_CREDENTIALS_PATH = '/etc/secrets/google-credentials.json'
-GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'bocalapaz@gmail.com')
+GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID')
 
 COLOR_CALENDAR_CONFIRMADA = '9'
 COLOR_CALENDAR_ASISTIO = '10'
