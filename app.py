@@ -166,20 +166,24 @@ def requiere_autenticacion(f):
 @app.route('/')
 @requiere_autenticacion
 def index():
-    registros = Log.query.filter_by(es_tecnico=False).all()
-    registros_ordenados = ordenar_por_fecha_y_hora(registros)
     conversaciones_activas = EstadoUsuario.query.filter_by(estado="atencion_humana").all()
     citas_pendientes = Cita.query.filter_by(estado="pendiente").order_by(Cita.creada_en.asc()).all()
     citas_confirmadas = Cita.query.filter_by(estado="confirmada").order_by(Cita.fecha_cita.asc()).all()
     llamadas_pendientes = Llamada.query.filter_by(estado="pendiente").order_by(Llamada.creada_en.asc()).all()
     return render_template(
         'index.html',
-        registros=registros_ordenados,
         conversaciones_activas=conversaciones_activas,
         citas_pendientes=citas_pendientes,
         citas_confirmadas=citas_confirmadas,
         llamadas_pendientes=llamadas_pendientes
     )
+
+@app.route('/registro_mensajes')
+@requiere_autenticacion
+def registro_mensajes():
+    registros = Log.query.filter_by(es_tecnico=False).all()
+    registros_ordenados = ordenar_por_fecha_y_hora(registros)
+    return render_template('registro_mensajes.html', registros=registros_ordenados)
 
 @app.route('/registro_tecnico')
 @requiere_autenticacion
