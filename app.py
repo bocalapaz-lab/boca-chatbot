@@ -26,6 +26,10 @@ class Log(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha_y_hora = db.Column(db.DateTime, default=datetime.utcnow)
     texto = db.Column(db.Text)
+    # Si es_tecnico=True, es "ruido" (JSON crudo, respuestas de la API,
+    # errores de Python) que solo interesa para depurar, no para el
+    # registro principal del panel.
+    es_tecnico = db.Column(db.Boolean, default=False)
 
 class EstadoUsuario(db.Model):
     numero = db.Column(db.String, primary_key=True)
@@ -54,10 +58,17 @@ class Llamada(db.Model):
 with app.app_context():
     db.create_all()
     inspector = db.inspect(db.engine)
+
     columnas_cita = [col['name'] for col in inspector.get_columns('cita')]
     if 'google_event_id' not in columnas_cita:
         with db.engine.connect() as conexion:
             conexion.execute(db.text('ALTER TABLE cita ADD COLUMN google_event_id VARCHAR'))
+            conexion.commit()
+
+    columnas_log = [col['name'] for col in inspector.get_columns('log')]
+    if 'es_tecnico' not in columnas_log:
+        with db.engine.connect() as conexion:
+            conexion.execute(db.text('ALTER TABLE log ADD COLUMN es_tecnico BOOLEAN DEFAULT 0'))
             conexion.commit()
 
 def ordenar_por_fecha_y_hora(registros):
@@ -155,7 +166,7 @@ def requiere_autenticacion(f):
 @app.route('/')
 @requiere_autenticacion
 def index():
-    registros = Log.query.all()
+    registros = Log.query.filter_by(es_tecnico=False).all()
     registros_ordenados = ordenar_por_fecha_y_hora(registros)
     conversaciones_activas = EstadoUsuario.query.filter_by(estado="atencion_humana").all()
     citas_pendientes = Cita.query.filter_by(estado="pendiente").order_by(Cita.creada_en.asc()).all()
@@ -170,8 +181,15 @@ def index():
         llamadas_pendientes=llamadas_pendientes
     )
 
-def agregar_mensajes_log(texto):
-    nuevo_registro = Log(texto=texto)
+@app.route('/registro_tecnico')
+@requiere_autenticacion
+def registro_tecnico():
+    registros = Log.query.filter_by(es_tecnico=True).all()
+    registros_ordenados = ordenar_por_fecha_y_hora(registros)
+    return render_template('registro_tecnico.html', registros=registros_ordenados)
+
+def agregar_mensajes_log(texto, tecnico=False):
+    nuevo_registro = Log(texto=texto, es_tecnico=tecnico)
     db.session.add(nuevo_registro)
     db.session.commit()
     limpiar_logs_viejos()
@@ -233,7 +251,7 @@ def obtener_servicio_calendar():
         )
         return build('calendar', 'v3', credentials=credenciales)
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (credenciales): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (credenciales): {str(e)}", tecnico=True)
         return None
 
 def crear_evento_calendar(cita):
@@ -266,7 +284,7 @@ def crear_evento_calendar(cita):
         agregar_mensajes_log(f"CALENDAR: evento creado -> {resultado.get('id')}")
         return resultado.get('id')
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}", tecnico=True)
         return None
 
 def actualizar_color_evento_calendar(google_event_id, color_id):
@@ -283,7 +301,7 @@ def actualizar_color_evento_calendar(google_event_id, color_id):
         ).execute()
         agregar_mensajes_log(f"CALENDAR: color actualizado -> {google_event_id} ({color_id})")
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (actualizar color): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (actualizar color): {str(e)}", tecnico=True)
 
 def eliminar_evento_calendar(google_event_id):
     if not google_event_id:
@@ -297,7 +315,7 @@ def eliminar_evento_calendar(google_event_id):
         ).execute()
         agregar_mensajes_log(f"CALENDAR: evento eliminado -> {google_event_id}")
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (eliminar evento): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (eliminar evento): {str(e)}", tecnico=True)
 
 TOKEN_CESAR = os.environ.get('WEBHOOK_VERIFY_TOKEN')
 CLAVE_RECORDATORIOS = os.environ.get('CLAVE_RECORDATORIOS')
@@ -339,7 +357,7 @@ def recibir_mensajes(req):
                                 f"titulo: {error.get('title')} "
                                 f"detalle: {error.get('error_data', {}).get('details')}"
                             )
-                    agregar_mensajes_log(info_estado)
+                    agregar_mensajes_log(info_estado, tecnico=True)
 
         objeto_mensaje = value.get('messages')
 
@@ -349,7 +367,7 @@ def recibir_mensajes(req):
             numero_normalizado = normalizar_numero_mx(numero)
             tipo = mensaje.get("type")
 
-            agregar_mensajes_log(json.dumps(mensaje, ensure_ascii=False))
+            agregar_mensajes_log(json.dumps(mensaje, ensure_ascii=False), tecnico=True)
 
             estado = obtener_estado(numero_normalizado)
 
@@ -435,7 +453,7 @@ def recibir_mensajes(req):
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
     except Exception as e:
-        agregar_mensajes_log(f"Error: {str(e)}")
+        agregar_mensajes_log(f"Error: {str(e)}", tecnico=True)
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
 @app.route('/enviar_recordatorios', methods=['GET'])
@@ -893,9 +911,9 @@ def enviar_payload(data):
         connection.request("POST", "/v25.0/1158458244021223/messages", data, headers)
         response = connection.getresponse()
         response_body = response.read().decode('utf-8')
-        agregar_mensajes_log(f"WhatsApp API -> Status: {response.status} {response.reason} | Body: {response_body}")
+        agregar_mensajes_log(f"WhatsApp API -> Status: {response.status} {response.reason} | Body: {response_body}", tecnico=True)
     except Exception as e:
-        agregar_mensajes_log(f"Error de conexion: {str(e)}")
+        agregar_mensajes_log(f"Error de conexion: {str(e)}", tecnico=True)
     finally:
         connection.close()
 
