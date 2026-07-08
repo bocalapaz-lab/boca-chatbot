@@ -205,18 +205,30 @@ def reclasificar_logs_viejos():
     db.session.commit()
     return f"Listo, se reclasificaron {contador} registros como técnicos."
 
+# Límites de almacenamiento del registro, separados por tipo para que el
+# ruido técnico (mucho más frecuente) no desplace a los mensajes de
+# negocio antes de tiempo. Cada uno se limpia de forma independiente.
+LIMITE_MENSAJES_NEGOCIO = 2000
+LIMITE_MENSAJES_TECNICOS = 1000
+COLCHON_NEGOCIO = 200
+COLCHON_TECNICO = 100
+
 def agregar_mensajes_log(texto, tecnico=False):
     nuevo_registro = Log(texto=texto, es_tecnico=tecnico)
     db.session.add(nuevo_registro)
     db.session.commit()
-    limpiar_logs_viejos()
+    limpiar_logs_viejos(tecnico)
 
-def limpiar_logs_viejos():
-    total = Log.query.count()
-    if total > 5000:
+def limpiar_logs_viejos(tecnico):
+    limite = LIMITE_MENSAJES_TECNICOS if tecnico else LIMITE_MENSAJES_NEGOCIO
+    colchon = COLCHON_TECNICO if tecnico else COLCHON_NEGOCIO
+
+    total = Log.query.filter_by(es_tecnico=tecnico).count()
+    if total > limite + colchon:
         a_borrar = (
-            Log.query.order_by(Log.fecha_y_hora.asc())
-            .limit(total - 5000 + 500)
+            Log.query.filter_by(es_tecnico=tecnico)
+            .order_by(Log.fecha_y_hora.asc())
+            .limit(total - limite)
             .all()
         )
         for registro in a_borrar:
