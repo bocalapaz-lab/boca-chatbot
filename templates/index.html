@@ -37,6 +37,8 @@
         .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
         .link-calendario { text-decoration: none; padding: 8px 14px; border-radius: 4px; background: #1565c0; color: white; font-size: 14px; }
+        .link-tecnico { font-size: 12px; color: #999; text-decoration: none; }
+        .link-tecnico:hover { text-decoration: underline; }
 
         /* Estilos para pantallas pequeñas (celular) */
         @media (max-width: 600px) {
@@ -181,7 +183,7 @@
 {% endif %}
 
 <!-- SECCIÓN 5: LOG DE MENSAJES -->
-<h2>📋 Registro de mensajes</h2>
+<h2>📋 Registro de mensajes <a href="/registro_tecnico" class="link-tecnico">(ver registro técnico completo)</a></h2>
 <table>
     <tr>
         <th>Fecha y Hora</th>
