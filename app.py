@@ -1,10 +1,11 @@
-from flask import Flask, jsonify, request, render_template, redirect, Response
+from flask import Flask, jsonify, request, render_template, redirect, Response, send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 from functools import wraps
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import http.client
+import urllib.request
 import json
 import time
 import os
@@ -15,8 +16,12 @@ app = Flask(__name__)
 DISK_PATH = '/var/data'
 if os.path.isdir(DISK_PATH):
     DB_PATH = os.path.join(DISK_PATH, 'metapython.db')
+    MEDIA_PATH = os.path.join(DISK_PATH, 'media')
 else:
     DB_PATH = 'metapython.db'
+    MEDIA_PATH = 'media'
+
+os.makedirs(MEDIA_PATH, exist_ok=True)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -26,6 +31,10 @@ class Log(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha_y_hora = db.Column(db.DateTime, default=datetime.utcnow)
     texto = db.Column(db.Text)
+    # Si es_tecnico=True, es "ruido" (JSON crudo, respuestas de la API,
+    # errores de Python) que solo interesa para depurar, no para el
+    # registro principal que ven los especialistas.
+    es_tecnico = db.Column(db.Boolean, default=False)
 
 class EstadoUsuario(db.Model):
     numero = db.Column(db.String, primary_key=True)
@@ -51,13 +60,37 @@ class Llamada(db.Model):
     estado = db.Column(db.String, default="pendiente")
     creada_en = db.Column(db.DateTime, default=datetime.utcnow)
 
+class MediaArchivo(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.String, nullable=False)
+    nombre_paciente = db.Column(db.String, nullable=True)
+    mime_type = db.Column(db.String, nullable=True)
+    ruta_archivo = db.Column(db.String, nullable=False)
+    recibido_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+class MensajeConversacion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.String, nullable=False)
+    remitente = db.Column(db.String, nullable=False)  # "paciente" o "especialista"
+    tipo = db.Column(db.String, default="text")
+    texto = db.Column(db.Text, nullable=True)
+    media_archivo_id = db.Column(db.Integer, db.ForeignKey('media_archivo.id'), nullable=True)
+    enviado_en = db.Column(db.DateTime, default=datetime.utcnow)
+
 with app.app_context():
     db.create_all()
     inspector = db.inspect(db.engine)
+
     columnas_cita = [col['name'] for col in inspector.get_columns('cita')]
     if 'google_event_id' not in columnas_cita:
         with db.engine.connect() as conexion:
             conexion.execute(db.text('ALTER TABLE cita ADD COLUMN google_event_id VARCHAR'))
+            conexion.commit()
+
+    columnas_log = [col['name'] for col in inspector.get_columns('log')]
+    if 'es_tecnico' not in columnas_log:
+        with db.engine.connect() as conexion:
+            conexion.execute(db.text('ALTER TABLE log ADD COLUMN es_tecnico BOOLEAN DEFAULT 0'))
             conexion.commit()
 
 def ordenar_por_fecha_y_hora(registros):
@@ -152,12 +185,28 @@ def requiere_autenticacion(f):
         return f(*args, **kwargs)
     return decorada
 
+def obtener_historial_conversacion(numero):
+    return (
+        MensajeConversacion.query
+        .filter_by(numero=numero)
+        .order_by(MensajeConversacion.enviado_en.asc())
+        .all()
+    )
+
 @app.route('/')
 @requiere_autenticacion
 def index():
-    registros = Log.query.all()
+    # Solo mensajes de negocio en el registro principal; el ruido tecnico
+    # (JSON crudo, respuestas de la API, errores) vive en /registro_tecnico
+    registros = Log.query.filter_by(es_tecnico=False).all()
     registros_ordenados = ordenar_por_fecha_y_hora(registros)
+
     conversaciones_activas = EstadoUsuario.query.filter_by(estado="atencion_humana").all()
+
+    historiales = {}
+    for conv in conversaciones_activas:
+        historiales[conv.numero] = obtener_historial_conversacion(conv.numero)
+
     citas_pendientes = Cita.query.filter_by(estado="pendiente").order_by(Cita.creada_en.asc()).all()
     citas_confirmadas = Cita.query.filter_by(estado="confirmada").order_by(Cita.fecha_cita.asc()).all()
     llamadas_pendientes = Llamada.query.filter_by(estado="pendiente").order_by(Llamada.creada_en.asc()).all()
@@ -165,13 +214,21 @@ def index():
         'index.html',
         registros=registros_ordenados,
         conversaciones_activas=conversaciones_activas,
+        historiales=historiales,
         citas_pendientes=citas_pendientes,
         citas_confirmadas=citas_confirmadas,
         llamadas_pendientes=llamadas_pendientes
     )
 
-def agregar_mensajes_log(texto):
-    nuevo_registro = Log(texto=texto)
+@app.route('/registro_tecnico')
+@requiere_autenticacion
+def registro_tecnico():
+    registros = Log.query.filter_by(es_tecnico=True).all()
+    registros_ordenados = ordenar_por_fecha_y_hora(registros)
+    return render_template('registro_tecnico.html', registros=registros_ordenados)
+
+def agregar_mensajes_log(texto, tecnico=False):
+    nuevo_registro = Log(texto=texto, es_tecnico=tecnico)
     db.session.add(nuevo_registro)
     db.session.commit()
     limpiar_logs_viejos()
@@ -233,7 +290,7 @@ def obtener_servicio_calendar():
         )
         return build('calendar', 'v3', credentials=credenciales)
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (credenciales): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (credenciales): {str(e)}", tecnico=True)
         return None
 
 def crear_evento_calendar(cita):
@@ -266,7 +323,7 @@ def crear_evento_calendar(cita):
         agregar_mensajes_log(f"CALENDAR: evento creado -> {resultado.get('id')}")
         return resultado.get('id')
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}", tecnico=True)
         return None
 
 def actualizar_color_evento_calendar(google_event_id, color_id):
@@ -283,7 +340,7 @@ def actualizar_color_evento_calendar(google_event_id, color_id):
         ).execute()
         agregar_mensajes_log(f"CALENDAR: color actualizado -> {google_event_id} ({color_id})")
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (actualizar color): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (actualizar color): {str(e)}", tecnico=True)
 
 def eliminar_evento_calendar(google_event_id):
     if not google_event_id:
@@ -297,7 +354,7 @@ def eliminar_evento_calendar(google_event_id):
         ).execute()
         agregar_mensajes_log(f"CALENDAR: evento eliminado -> {google_event_id}")
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (eliminar evento): {str(e)}")
+        agregar_mensajes_log(f"Error Google Calendar (eliminar evento): {str(e)}", tecnico=True)
 
 TOKEN_CESAR = os.environ.get('WEBHOOK_VERIFY_TOKEN')
 CLAVE_RECORDATORIOS = os.environ.get('CLAVE_RECORDATORIOS')
@@ -315,6 +372,118 @@ def verificar_token(req):
     if challenge and token == TOKEN_CESAR:
         return challenge
     return jsonify({'error': 'Token invalido'}), 401
+
+TIPOS_MEDIA = ("image", "audio", "video", "document", "sticker")
+
+def descargar_media_whatsapp(media_id):
+    """
+    Descarga un archivo multimedia de los servidores de Meta.
+    Hace 2 peticiones: primero obtiene la URL real del archivo a partir
+    del media_id, luego descarga el contenido desde esa URL.
+    Devuelve (ruta_local, mime_type) o (None, None) si algo falla.
+    """
+    token = os.environ.get('WHATSAPP_TOKEN')
+    try:
+        conexion = http.client.HTTPSConnection("graph.facebook.com")
+        headers = {"Authorization": f"Bearer {token}"}
+        conexion.request("GET", f"/v25.0/{media_id}", None, headers)
+        respuesta = conexion.getresponse()
+        info = json.loads(respuesta.read().decode('utf-8'))
+        conexion.close()
+
+        url_real = info.get('url')
+        mime_type = info.get('mime_type', 'application/octet-stream')
+        if not url_real:
+            agregar_mensajes_log(
+                f"Error descargando media {media_id}: no se obtuvo URL real -> {info}",
+                tecnico=True
+            )
+            return None, None
+
+        peticion = urllib.request.Request(url_real, headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(peticion) as respuesta_archivo:
+            contenido = respuesta_archivo.read()
+
+        extension = mime_type.split('/')[-1].split(';')[0]
+        nombre_archivo = f"{media_id}.{extension}"
+        ruta_completa = os.path.join(MEDIA_PATH, nombre_archivo)
+        with open(ruta_completa, 'wb') as f:
+            f.write(contenido)
+
+        return ruta_completa, mime_type
+    except Exception as e:
+        agregar_mensajes_log(f"Error descargando media {media_id}: {str(e)}", tecnico=True)
+        return None, None
+
+def guardar_mensaje_paciente(numero_normalizado, mensaje, tipo):
+    """
+    Guarda en MensajeConversacion el mensaje que un paciente en estado
+    atencion_humana acaba de mandar, para que aparezca en la vista de
+    chat del panel. Si es un archivo multimedia, lo descarga y lo
+    registra en MediaArchivo.
+    """
+    estado_usuario = EstadoUsuario.query.get(numero_normalizado)
+    nombre_paciente = estado_usuario.nombre if estado_usuario else None
+
+    if tipo == "text":
+        texto = mensaje.get("text", {}).get("body", "")
+        db.session.add(MensajeConversacion(
+            numero=numero_normalizado,
+            remitente="paciente",
+            tipo="text",
+            texto=texto
+        ))
+        db.session.commit()
+        return
+
+    if tipo in TIPOS_MEDIA:
+        media_info = mensaje.get(tipo, {})
+        media_id = media_info.get("id")
+        caption = media_info.get("caption")
+
+        if not media_id:
+            return
+
+        ruta, mime_type = descargar_media_whatsapp(media_id)
+
+        if not ruta:
+            db.session.add(MensajeConversacion(
+                numero=numero_normalizado,
+                remitente="paciente",
+                tipo=tipo,
+                texto="⚠️ No se pudo descargar este archivo adjunto."
+            ))
+            db.session.commit()
+            return
+
+        archivo = MediaArchivo(
+            numero=numero_normalizado,
+            nombre_paciente=nombre_paciente,
+            mime_type=mime_type,
+            ruta_archivo=ruta
+        )
+        db.session.add(archivo)
+        db.session.commit()
+
+        db.session.add(MensajeConversacion(
+            numero=numero_normalizado,
+            remitente="paciente",
+            tipo=tipo,
+            texto=caption,
+            media_archivo_id=archivo.id
+        ))
+        db.session.commit()
+        return
+
+    # Cualquier otro tipo (ubicacion, contacto, etc.) que no manejamos
+    # como archivo descargable, al menos se anota para no perder el rastro.
+    db.session.add(MensajeConversacion(
+        numero=numero_normalizado,
+        remitente="paciente",
+        tipo=tipo or "desconocido",
+        texto="[Este paciente envió un tipo de mensaje que aún no se muestra en el chat]"
+    ))
+    db.session.commit()
 
 def recibir_mensajes(req):
     try:
@@ -339,7 +508,7 @@ def recibir_mensajes(req):
                                 f"titulo: {error.get('title')} "
                                 f"detalle: {error.get('error_data', {}).get('details')}"
                             )
-                    agregar_mensajes_log(info_estado)
+                    agregar_mensajes_log(info_estado, tecnico=True)
 
         objeto_mensaje = value.get('messages')
 
@@ -349,11 +518,12 @@ def recibir_mensajes(req):
             numero_normalizado = normalizar_numero_mx(numero)
             tipo = mensaje.get("type")
 
-            agregar_mensajes_log(json.dumps(mensaje, ensure_ascii=False))
+            agregar_mensajes_log(json.dumps(mensaje, ensure_ascii=False), tecnico=True)
 
             estado = obtener_estado(numero_normalizado)
 
             if estado == "atencion_humana":
+                guardar_mensaje_paciente(numero_normalizado, mensaje, tipo)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
             if estado == "esperando_nombre_cita" and tipo == "text":
@@ -435,7 +605,7 @@ def recibir_mensajes(req):
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
     except Exception as e:
-        agregar_mensajes_log(f"Error: {str(e)}")
+        agregar_mensajes_log(f"Error: {str(e)}", tecnico=True)
         return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
 @app.route('/enviar_recordatorios', methods=['GET'])
@@ -746,11 +916,18 @@ def eliminar_registro_cita():
 @app.route('/descargar_backup')
 @requiere_autenticacion
 def descargar_backup():
-    from flask import send_file
     if not os.path.isfile(DB_PATH):
         return "No se encontró la base de datos.", 404
     nombre_descarga = f"boca_backup_{datetime.now().strftime('%Y-%m-%d_%H%M')}.db"
     return send_file(DB_PATH, as_attachment=True, download_name=nombre_descarga)
+
+@app.route('/media/ver/<int:media_id>')
+@requiere_autenticacion
+def ver_media(media_id):
+    archivo = MediaArchivo.query.get(media_id)
+    if not archivo or not os.path.isfile(archivo.ruta_archivo):
+        return "Archivo no encontrado", 404
+    return send_file(archivo.ruta_archivo, mimetype=archivo.mime_type)
 
 @app.route('/calendario')
 @requiere_autenticacion
@@ -815,6 +992,14 @@ def responder():
         }
         enviar_payload(data)
         agregar_mensajes_log(f"RESPUESTA MANUAL -> {numero}: {mensaje_texto}")
+
+        db.session.add(MensajeConversacion(
+            numero=numero,
+            remitente="especialista",
+            tipo="text",
+            texto=mensaje_texto
+        ))
+        db.session.commit()
 
     return redirect('/')
 
@@ -893,9 +1078,9 @@ def enviar_payload(data):
         connection.request("POST", "/v25.0/1158458244021223/messages", data, headers)
         response = connection.getresponse()
         response_body = response.read().decode('utf-8')
-        agregar_mensajes_log(f"WhatsApp API -> Status: {response.status} {response.reason} | Body: {response_body}")
+        agregar_mensajes_log(f"WhatsApp API -> Status: {response.status} {response.reason} | Body: {response_body}", tecnico=True)
     except Exception as e:
-        agregar_mensajes_log(f"Error de conexion: {str(e)}")
+        agregar_mensajes_log(f"Error de conexion: {str(e)}", tecnico=True)
     finally:
         connection.close()
 
