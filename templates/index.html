@@ -38,30 +38,6 @@
         .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
         .link-calendario { text-decoration: none; padding: 8px 14px; border-radius: 4px; background: #1565c0; color: white; font-size: 14px; }
 
-        /* Vista de chat estilo WhatsApp para las conversaciones activas */
-        .chat-historial {
-            max-height: 340px;
-            overflow-y: auto;
-            background: #e5ddd5;
-            padding: 10px;
-            border-radius: 6px;
-            margin-top: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .chat-vacio { color: #777; font-style: italic; font-size: 13px; text-align: center; padding: 10px; }
-        .burbuja { max-width: 78%; padding: 7px 10px; border-radius: 8px; font-size: 14px; line-height: 1.35; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-        .burbuja-paciente { align-self: flex-start; background: #ffffff; border-top-left-radius: 2px; }
-        .burbuja-especialista { align-self: flex-end; background: #d9fdd3; border-top-right-radius: 2px; }
-        .burbuja-texto { white-space: pre-wrap; word-break: break-word; }
-        .burbuja-imagen { max-width: 220px; max-height: 220px; border-radius: 4px; display: block; margin-bottom: 4px; }
-        .burbuja-archivo { display: inline-block; padding: 6px 10px; background: rgba(0,0,0,0.05); border-radius: 4px; text-decoration: none; color: #075e54; font-size: 13px; margin-bottom: 4px; }
-        .burbuja-hora { font-size: 10px; color: #999; text-align: right; margin-top: 3px; }
-
-        .link-tecnico { font-size: 12px; color: #999; text-decoration: none; }
-        .link-tecnico:hover { text-decoration: underline; }
-
         /* Estilos para pantallas pequeñas (celular) */
         @media (max-width: 600px) {
             body { margin: 12px; }
@@ -73,7 +49,6 @@
             .form-inline { flex-direction: column; align-items: stretch; }
             .form-inline input[type=text] { width: 100%; box-sizing: border-box; }
             .panel { padding: 18px; }
-            .burbuja { max-width: 90%; }
         }
     </style>
 </head>
@@ -187,39 +162,6 @@
         <div class="numero">📱 {{ conv.numero }}</div>
         <div class="nombre">👤 {{ conv.nombre or 'Sin nombre' }}</div>
         <div class="desde">Esperando desde: {{ conv.desde }}</div>
-
-        <!-- Vista de chat tipo WhatsApp: burbujas con el historial de esta conversación -->
-        <div class="chat-historial" id="chat-{{ loop.index }}">
-            {% set mensajes = historiales.get(conv.numero, []) %}
-            {% if mensajes %}
-                {% for msg in mensajes %}
-                    <div class="burbuja {{ 'burbuja-paciente' if msg.remitente == 'paciente' else 'burbuja-especialista' }}">
-                        <div class="burbuja-texto">
-                            {% if msg.media_archivo_id %}
-                                {% if msg.tipo == 'image' %}
-                                    <a href="/media/ver/{{ msg.media_archivo_id }}" target="_blank">
-                                        <img src="/media/ver/{{ msg.media_archivo_id }}" class="burbuja-imagen" alt="Imagen enviada por el paciente">
-                                    </a>
-                                {% elif msg.tipo == 'audio' %}
-                                    <audio controls style="max-width: 220px;">
-                                        <source src="/media/ver/{{ msg.media_archivo_id }}">
-                                    </audio>
-                                {% else %}
-                                    <a href="/media/ver/{{ msg.media_archivo_id }}" target="_blank" class="burbuja-archivo">📎 Descargar archivo ({{ msg.tipo }})</a>
-                                {% endif %}
-                                {% if msg.texto %}<div>{{ msg.texto }}</div>{% endif %}
-                            {% else %}
-                                {{ msg.texto or '' }}
-                            {% endif %}
-                        </div>
-                        <div class="burbuja-hora">{{ msg.enviado_en.strftime('%d/%m %H:%M') }}</div>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="chat-vacio">Aún no hay mensajes en esta conversación.</div>
-            {% endif %}
-        </div>
-
         <form action="/responder" method="POST"
               onsubmit="return confirm('¿Enviar esta respuesta al paciente?');">
             <input type="hidden" name="numero" value="{{ conv.numero }}">
@@ -239,7 +181,7 @@
 {% endif %}
 
 <!-- SECCIÓN 5: LOG DE MENSAJES -->
-<h2>📋 Registro de mensajes <a href="/registro_tecnico" class="link-tecnico">(ver registro técnico completo)</a></h2>
+<h2>📋 Registro de mensajes</h2>
 <table>
     <tr>
         <th>Fecha y Hora</th>
@@ -272,12 +214,6 @@
             "⏰ Hora: " + hora;
         return confirm(mensaje);
     }
-
-    // Al cargar la página, desplaza cada historial de chat hasta el
-    // último mensaje, como haría WhatsApp normalmente.
-    document.querySelectorAll('.chat-historial').forEach(function (contenedor) {
-        contenedor.scrollTop = contenedor.scrollHeight;
-    });
 
     // Actualiza la página automáticamente cada 30 segundos, para ver
     // solicitudes y mensajes nuevos sin tener que refrescar a mano.
