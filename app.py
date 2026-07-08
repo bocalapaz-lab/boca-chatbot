@@ -124,19 +124,19 @@ def enviar_alerta_seguridad(ip):
     hora_actual = datetime.now(zona_mexico).strftime('%d/%m/%Y a las %H:%M')
     data = {
         "messaging_product": "whatsapp",
-        "recipient_type": "individual",
         "to": numero_admin,
-        "type": "text",
-        "text": {
-            "preview_url": False,
-            "body": (
-                "🔒 *Alerta de seguridad - Panel BOCA*\n\n"
-                "Se detectaron 3 intentos fallidos de inicio de sesión "
-                f"en tu panel el {hora_actual}.\n\n"
-                "Esa dirección quedó bloqueada automáticamente durante "
-                "15 minutos. Si no fuiste tú, no necesitas hacer nada más "
-                "por ahora, pero te lo avisamos para que estés al tanto."
-            )
+        "type": "template",
+        "template": {
+            "name": "alerta_seguridad_panel_boca",
+            "language": {"code": "es_MX"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": hora_actual}
+                    ]
+                }
+            ]
         }
     }
     enviar_payload(data)
