@@ -3,31 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <title>BOCA - Calendario</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background: #f5f5f5; }
-        h1 { color: #222; }
+        :root {
+            --teal-900: #0d4f4a;
+            --teal-700: #14746c;
+            --teal-500: #1c9188;
+            --teal-100: #e3f2f0;
+            --ink: #1f2937;
+            --ink-soft: #5b6472;
+            --bg: #f6f8f8;
+            --card: #ffffff;
+            --line: #e6ebe9;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', Arial, sans-serif; margin: 30px; background: var(--bg); color: var(--ink); }
+        h1 {
+            font-family: 'Manrope', Arial, sans-serif;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+        }
         .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .nav-links a { text-decoration: none; padding: 8px 14px; border-radius: 4px; background: #1565c0; color: white; font-size: 14px; margin-right: 8px; }
+        .nav-links a {
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            background: var(--teal-700);
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
         .nav-links a.volver { background: #555; }
-        .tabla-scroll { max-height: 75vh; overflow-y: auto; background: white; border-radius: 6px; }
+        .tabla-scroll { max-height: 75vh; overflow-y: auto; background: var(--card); border-radius: 10px; border: 1px solid var(--line); }
         table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 4px; text-align: center; vertical-align: top; font-size: 12px; }
-        th { background: #f0f0f0; position: sticky; top: 0; z-index: 2; }
-        .hora-col { background: #f0f0f0; font-weight: bold; width: 60px; position: sticky; left: 0; z-index: 1; }
+        th, td { border: 1px solid var(--line); padding: 4px; text-align: center; vertical-align: top; font-size: 12px; }
+        th { background: var(--teal-100); color: var(--teal-900); position: sticky; top: 0; z-index: 2; font-weight: 700; }
+        .hora-col { background: var(--teal-100); color: var(--teal-900); font-weight: 700; width: 60px; position: sticky; left: 0; z-index: 1; }
         thead th.hora-col { z-index: 3; }
-        .celda-vacia { color: #ddd; height: 30px; min-width: 90px; }
-        .celda-confirmada { background: #1565c0; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-asistio { background: #2e7d32; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-no-asistio { background: #757575; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-cancelada { background: #c62828; color: white; border-radius: 4px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-vacia { color: #d7dedc; height: 30px; min-width: 90px; }
+        .celda-confirmada { background: var(--teal-700); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-asistio { background: #2e7d32; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-no-asistio { background: #757575; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-cancelada { background: #c62828; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
         .btn-borrar-registro { position: absolute; top: 1px; right: 2px; background: none; border: none; color: white; opacity: 0.7; font-size: 11px; cursor: pointer; padding: 0 2px; margin: 0; }
         .btn-borrar-registro:hover { opacity: 1; }
         .form-borrar { display: inline; margin: 0; padding: 0; }
         .celda-nombre { font-weight: bold; display: block; font-size: 11px; }
         .celda-hora { font-size: 10px; opacity: 0.9; }
-        .leyenda { margin-top: 15px; font-size: 13px; }
-        .leyenda span { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
-        .cuadro-confirmada { background: #1565c0; }
+        .leyenda { margin-top: 15px; font-size: 13px; color: var(--ink-soft); }
+        .leyenda span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
+        .cuadro-confirmada { background: var(--teal-700); }
         .cuadro-asistio { background: #2e7d32; }
         .cuadro-no-asistio { background: #757575; }
         .cuadro-cancelada { background: #c62828; }
