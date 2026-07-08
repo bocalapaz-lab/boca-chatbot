@@ -188,6 +188,19 @@ def registro_tecnico():
     registros_ordenados = ordenar_por_fecha_y_hora(registros)
     return render_template('registro_tecnico.html', registros=registros_ordenados)
 
+@app.route('/reclasificar_logs_viejos')
+@requiere_autenticacion
+def reclasificar_logs_viejos():
+    prefijos_tecnicos = ('{', 'WhatsApp API ->', 'Error', 'ESTADO DE MENSAJE')
+    registros = Log.query.filter_by(es_tecnico=False).all()
+    contador = 0
+    for registro in registros:
+        if registro.texto and registro.texto.strip().startswith(prefijos_tecnicos):
+            registro.es_tecnico = True
+            contador += 1
+    db.session.commit()
+    return f"Listo, se reclasificaron {contador} registros como técnicos."
+
 def agregar_mensajes_log(texto, tecnico=False):
     nuevo_registro = Log(texto=texto, es_tecnico=tecnico)
     db.session.add(nuevo_registro)
