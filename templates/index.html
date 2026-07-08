@@ -36,9 +36,10 @@
         .form-group { display: flex; flex-direction: column; }
         .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+        .links-superiores { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
         .link-calendario { text-decoration: none; padding: 8px 14px; border-radius: 4px; background: #1565c0; color: white; font-size: 14px; }
-        .link-tecnico { font-size: 12px; color: #999; text-decoration: none; }
-        .link-tecnico:hover { text-decoration: underline; }
+        .link-secundario { font-size: 12px; color: #999; text-decoration: none; }
+        .link-secundario:hover { text-decoration: underline; }
 
         /* Estilos para pantallas pequeñas (celular) */
         @media (max-width: 600px) {
@@ -58,7 +59,11 @@
 
 <div class="top-bar">
     <h1>BOCA - Panel de control</h1>
-    <a href="/calendario" class="link-calendario">📅 Ver calendario semanal</a>
+    <div class="links-superiores">
+        <a href="/registro_mensajes" class="link-secundario">Ver registro de mensajes</a>
+        <a href="/registro_tecnico" class="link-secundario">Ver registro técnico</a>
+        <a href="/calendario" class="link-calendario">📅 Ver calendario semanal</a>
+    </div>
 </div>
 
 <!-- SECCIÓN 1: CITAS PENDIENTES -->
@@ -181,21 +186,6 @@
 {% else %}
     <p class="sin-pendientes">No hay conversaciones pendientes de atención en este momento.</p>
 {% endif %}
-
-<!-- SECCIÓN 5: LOG DE MENSAJES -->
-<h2>📋 Registro de mensajes <a href="/registro_tecnico" class="link-tecnico">(ver registro técnico completo)</a></h2>
-<table>
-    <tr>
-        <th>Fecha y Hora</th>
-        <th>Mensaje</th>
-    </tr>
-    {% for registro in registros %}
-    <tr>
-        <td>{{ registro.fecha_y_hora }}</td>
-        <td>{{ registro.texto }}</td>
-    </tr>
-    {% endfor %}
-</table>
 
 </body>
 
