@@ -26,9 +26,6 @@ class Log(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha_y_hora = db.Column(db.DateTime, default=datetime.utcnow)
     texto = db.Column(db.Text)
-    # Si es_tecnico=True, es "ruido" (JSON crudo, respuestas de la API,
-    # errores de Python) que solo interesa para depurar, no para el
-    # registro principal del panel.
     es_tecnico = db.Column(db.Boolean, default=False)
 
 class EstadoUsuario(db.Model):
@@ -53,6 +50,25 @@ class Llamada(db.Model):
     numero = db.Column(db.String, nullable=False)
     nombre = db.Column(db.String, nullable=True)
     estado = db.Column(db.String, default="pendiente")
+    creada_en = db.Column(db.DateTime, default=datetime.utcnow)
+
+class CitaDoctor(db.Model):
+    """
+    Citas gestionadas para pacientes de OTROS doctores que refieren
+    trabajo a BOCA. El trato es directamente con el doctor, no con el
+    paciente: el doctor es quien recibe los recordatorios, y es quien
+    interactua con el chatbot mediante la palabra clave secreta.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    doctor_numero = db.Column(db.String, nullable=False)
+    doctor_nombre = db.Column(db.String, nullable=True)
+    paciente_nombre = db.Column(db.String, nullable=True)
+    lugar = db.Column(db.String, nullable=True)
+    fecha_cita = db.Column(db.String, nullable=True)
+    hora_cita = db.Column(db.String, nullable=True)
+    estado = db.Column(db.String, default="pendiente_autorizacion")
+    google_event_id = db.Column(db.String, nullable=True)
+    recordatorio_enviado = db.Column(db.Boolean, default=False)
     creada_en = db.Column(db.DateTime, default=datetime.utcnow)
 
 with app.app_context():
@@ -170,12 +186,24 @@ def index():
     citas_pendientes = Cita.query.filter_by(estado="pendiente").order_by(Cita.creada_en.asc()).all()
     citas_confirmadas = Cita.query.filter_by(estado="confirmada").order_by(Cita.fecha_cita.asc()).all()
     llamadas_pendientes = Llamada.query.filter_by(estado="pendiente").order_by(Llamada.creada_en.asc()).all()
+    citas_doctor_pendientes = (
+        CitaDoctor.query.filter_by(estado="pendiente_autorizacion")
+        .order_by(CitaDoctor.creada_en.asc())
+        .all()
+    )
+    citas_doctor_confirmadas = (
+        CitaDoctor.query.filter_by(estado="confirmada")
+        .order_by(CitaDoctor.fecha_cita.asc())
+        .all()
+    )
     return render_template(
         'index.html',
         conversaciones_activas=conversaciones_activas,
         citas_pendientes=citas_pendientes,
         citas_confirmadas=citas_confirmadas,
-        llamadas_pendientes=llamadas_pendientes
+        llamadas_pendientes=llamadas_pendientes,
+        citas_doctor_pendientes=citas_doctor_pendientes,
+        citas_doctor_confirmadas=citas_doctor_confirmadas
     )
 
 @app.route('/registro_mensajes')
@@ -192,9 +220,6 @@ def registro_tecnico():
     registros_ordenados = ordenar_por_fecha_y_hora(registros)
     return render_template('registro_tecnico.html', registros=registros_ordenados)
 
-# Límites de almacenamiento del registro, separados por tipo para que el
-# ruido técnico (mucho más frecuente) no desplace a los mensajes de
-# negocio antes de tiempo. Cada uno se limpia de forma independiente.
 LIMITE_MENSAJES_NEGOCIO = 2000
 LIMITE_MENSAJES_TECNICOS = 1000
 COLCHON_NEGOCIO = 200
@@ -256,6 +281,7 @@ COLOR_CALENDAR_CONFIRMADA = '9'
 COLOR_CALENDAR_ASISTIO = '10'
 COLOR_CALENDAR_NO_ASISTIO = '8'
 COLOR_CALENDAR_CANCELADA = '11'
+COLOR_CALENDAR_MEDICO_REFERIDO = '3'
 
 def obtener_servicio_calendar():
     if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
@@ -303,6 +329,40 @@ def crear_evento_calendar(cita):
         agregar_mensajes_log(f"Error Google Calendar (crear evento): {str(e)}", tecnico=True)
         return None
 
+def crear_evento_calendar_doctor(cita_doctor):
+    servicio = obtener_servicio_calendar()
+    if not servicio:
+        return None
+    try:
+        zona_mexico = pytz.timezone('America/Mexico_City')
+        inicio_naive = datetime.strptime(
+            f"{cita_doctor.fecha_cita} {cita_doctor.hora_cita}", "%d/%m/%Y %H:%M"
+        )
+        inicio = zona_mexico.localize(inicio_naive)
+        fin = inicio + timedelta(hours=1)
+
+        evento = {
+            'summary': f"Ref: {cita_doctor.paciente_nombre or 'Paciente'} (Dr. {cita_doctor.doctor_nombre or ''})",
+            'description': (
+                f'Paciente referido de: {cita_doctor.doctor_nombre or "Sin nombre"}\n'
+                f'Paciente: {cita_doctor.paciente_nombre or "Sin nombre"}\n'
+                f'Lugar: {cita_doctor.lugar or "Sin especificar"}\n'
+                f'Teléfono del doctor: {cita_doctor.doctor_numero}'
+            ),
+            'location': cita_doctor.lugar or '',
+            'start': {'dateTime': inicio.isoformat()},
+            'end': {'dateTime': fin.isoformat()},
+            'colorId': COLOR_CALENDAR_MEDICO_REFERIDO,
+        }
+        resultado = servicio.events().insert(
+            calendarId=GOOGLE_CALENDAR_ID, body=evento
+        ).execute()
+        agregar_mensajes_log(f"CALENDAR: evento (medico referido) creado -> {resultado.get('id')}")
+        return resultado.get('id')
+    except Exception as e:
+        agregar_mensajes_log(f"Error Google Calendar (crear evento medico referido): {str(e)}", tecnico=True)
+        return None
+
 def actualizar_color_evento_calendar(google_event_id, color_id):
     if not google_event_id:
         return
@@ -335,6 +395,7 @@ def eliminar_evento_calendar(google_event_id):
 
 TOKEN_CESAR = os.environ.get('WEBHOOK_VERIFY_TOKEN')
 CLAVE_RECORDATORIOS = os.environ.get('CLAVE_RECORDATORIOS')
+CLAVE_CITA_DOCTOR = os.environ.get('CLAVE_CITA_DOCTOR', 'citaenclave')
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -350,6 +411,30 @@ def verificar_token(req):
         return challenge
     return jsonify({'error': 'Token invalido'}), 401
 
+def manejar_palabra_clave_doctor(numero, numero_normalizado):
+    """
+    Un doctor que refiere pacientes escribió la palabra clave secreta.
+    Si ya tiene una solicitud pendiente de autorizacion, no se crea otra
+    (evita duplicados si la escribe varias veces por error o impaciencia).
+    """
+    solicitud_existente = CitaDoctor.query.filter_by(
+        doctor_numero=numero_normalizado,
+        estado="pendiente_autorizacion"
+    ).first()
+
+    if solicitud_existente:
+        enviar_ya_tiene_solicitud_doctor(numero)
+        return
+
+    nueva_solicitud = CitaDoctor(
+        doctor_numero=numero_normalizado,
+        estado="pendiente_autorizacion"
+    )
+    db.session.add(nueva_solicitud)
+    db.session.commit()
+    agregar_mensajes_log(f"SOLICITUD DE MEDICO REFERIDO -> {numero_normalizado}")
+    enviar_solicitud_doctor_recibida(numero)
+
 def recibir_mensajes(req):
     try:
         data = req.get_json()
@@ -357,9 +442,6 @@ def recibir_mensajes(req):
         changes = entry['changes'][0]
         value = changes['value']
 
-        # Meta manda avisos de "estado de entrega" por separado de los
-        # mensajes entrantes. Solo registramos cuando algo FALLA (sent,
-        # delivered y read no aportan nada util y solo llenan el registro).
         estados = value.get('statuses')
         if estados:
             for estado in estados:
@@ -384,6 +466,12 @@ def recibir_mensajes(req):
             tipo = mensaje.get("type")
 
             agregar_mensajes_log(json.dumps(mensaje, ensure_ascii=False), tecnico=True)
+
+            if tipo == "text":
+                texto_bruto = mensaje.get("text", {}).get("body", "").strip()
+                if CLAVE_CITA_DOCTOR and texto_bruto.lower() == CLAVE_CITA_DOCTOR.lower():
+                    manejar_palabra_clave_doctor(numero, numero_normalizado)
+                    return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
             estado = obtener_estado(numero_normalizado)
 
@@ -514,7 +602,41 @@ def enviar_recordatorios():
         agregar_mensajes_log(f"RECORDATORIO ENVIADO -> {cita.numero} | {cita.nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
         enviados += 1
 
-    return jsonify({'mensaje': f'Recordatorios enviados: {enviados}', 'fecha': hoy}), 200
+    citas_doctor_hoy = CitaDoctor.query.filter_by(
+        estado="confirmada",
+        recordatorio_enviado=False,
+        fecha_cita=hoy
+    ).all()
+
+    enviados_doctor = 0
+    for cita_doctor in citas_doctor_hoy:
+        paciente_nombre = cita_doctor.paciente_nombre or "tu paciente"
+        lugar = cita_doctor.lugar or "el lugar acordado"
+        texto_recordatorio = (
+            f"🩺 *Recordatorio de consulta*\n\n"
+            f"Hoy tienes consulta con {paciente_nombre} a las "
+            f"{cita_doctor.hora_cita} en {lugar}."
+        )
+        data_doctor = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": cita_doctor.doctor_numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": texto_recordatorio}
+        }
+        enviar_payload(data_doctor)
+        cita_doctor.recordatorio_enviado = True
+        db.session.commit()
+        agregar_mensajes_log(
+            f"RECORDATORIO ENVIADO (medico referido) -> {cita_doctor.doctor_numero} | "
+            f"Paciente: {paciente_nombre} | {cita_doctor.fecha_cita} a las {cita_doctor.hora_cita}"
+        )
+        enviados_doctor += 1
+
+    return jsonify({
+        'mensaje': f'Recordatorios enviados: {enviados} | Recordatorios a doctores: {enviados_doctor}',
+        'fecha': hoy
+    }), 200
 
 @app.route('/confirmar_cita', methods=['POST'])
 @requiere_autenticacion
@@ -600,6 +722,97 @@ def rechazar_solicitud():
         enviar_payload(data)
 
     return redirect('/')
+
+@app.route('/autorizar_cita_doctor', methods=['POST'])
+@requiere_autenticacion
+def autorizar_cita_doctor():
+    cita_doctor_id = request.form.get('cita_doctor_id')
+    doctor_nombre = (request.form.get('doctor_nombre') or '').strip()
+    paciente_nombre = (request.form.get('paciente_nombre') or '').strip()
+    lugar = (request.form.get('lugar') or '').strip()
+    fecha = normalizar_fecha(request.form.get('fecha'))
+    hora = normalizar_hora(request.form.get('hora'))
+
+    cita_doctor = CitaDoctor.query.get(cita_doctor_id)
+    if cita_doctor and doctor_nombre and paciente_nombre and fecha and hora:
+        cita_doctor.doctor_nombre = doctor_nombre
+        cita_doctor.paciente_nombre = paciente_nombre
+        cita_doctor.lugar = lugar
+        cita_doctor.fecha_cita = fecha
+        cita_doctor.hora_cita = hora
+        cita_doctor.estado = "confirmada"
+        db.session.commit()
+
+        cita_doctor.google_event_id = crear_evento_calendar_doctor(cita_doctor)
+        db.session.commit()
+
+        mensaje_confirmacion = (
+            f"✅ *Cita registrada*\n\n"
+            f"👤 Paciente: {paciente_nombre}\n"
+            f"📅 Fecha: {fecha}\n"
+            f"⏰ Hora: {hora}\n"
+            f"📍 Lugar: {lugar or 'Por confirmar'}\n\n"
+            f"Te enviaremos un recordatorio el mismo día de la consulta. "
+            f"¡Gracias por confiar en *BOCA*! 😊"
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": cita_doctor.doctor_numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_confirmacion}
+        }
+        enviar_payload(data)
+        agregar_mensajes_log(
+            f"CITA MEDICO REFERIDO AUTORIZADA -> {cita_doctor.doctor_numero} | "
+            f"Dr. {doctor_nombre} | Paciente: {paciente_nombre} | {fecha} a las {hora}"
+        )
+
+    return redirect('/')
+
+@app.route('/rechazar_cita_doctor', methods=['POST'])
+@requiere_autenticacion
+def rechazar_cita_doctor():
+    cita_doctor_id = request.form.get('cita_doctor_id')
+    cita_doctor = CitaDoctor.query.get(cita_doctor_id)
+    if cita_doctor:
+        numero = cita_doctor.doctor_numero
+        agregar_mensajes_log(f"SOLICITUD DE MEDICO REFERIDO RECHAZADA -> {numero}")
+
+        mensaje_rechazo = (
+            "ℹ️ Hemos revisado tu solicitud y no encontramos información "
+            "pertinente asociada a ella."
+        )
+        data = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": numero,
+            "type": "text",
+            "text": {"preview_url": False, "body": mensaje_rechazo}
+        }
+        enviar_payload(data)
+
+        db.session.delete(cita_doctor)
+        db.session.commit()
+
+    return redirect('/')
+
+@app.route('/quitar_cita_doctor', methods=['POST'])
+@requiere_autenticacion
+def quitar_cita_doctor():
+    cita_doctor_id = request.form.get('cita_doctor_id')
+    cita_doctor = CitaDoctor.query.get(cita_doctor_id)
+    if cita_doctor:
+        info = f"{cita_doctor.fecha_cita} a las {cita_doctor.hora_cita}" if cita_doctor.fecha_cita else "sin fecha"
+        eliminar_evento_calendar(cita_doctor.google_event_id)
+        agregar_mensajes_log(
+            f"CITA MEDICO REFERIDO ELIMINADA -> {cita_doctor.doctor_numero} | "
+            f"Dr. {cita_doctor.doctor_nombre or 'Sin nombre'} | Cita del {info}"
+        )
+        db.session.delete(cita_doctor)
+        db.session.commit()
+
+    return redirect(request.referrer or '/')
 
 @app.route('/cancelar_cita_admin', methods=['POST'])
 @requiere_autenticacion
@@ -812,12 +1025,24 @@ def calendario():
         Cita.fecha_cita.in_(dias_str)
     ).all()
 
+    citas_doctor_semana = CitaDoctor.query.filter(
+        CitaDoctor.estado == "confirmada",
+        CitaDoctor.fecha_cita.in_(dias_str)
+    ).all()
+
     grid = {hora: {fecha: [] for fecha in dias_str} for hora in horas}
     for cita in citas_semana:
         if cita.hora_cita and ':' in cita.hora_cita:
             hora_key = cita.hora_cita.split(':')[0].zfill(2) + ":00"
             if hora_key in grid and cita.fecha_cita in grid[hora_key]:
-                grid[hora_key][cita.fecha_cita].append(cita)
+                grid[hora_key][cita.fecha_cita].append({'tipo': 'paciente', 'obj': cita})
+
+    grid_doctor = {hora: {fecha: [] for fecha in dias_str} for hora in horas}
+    for cita_doctor in citas_doctor_semana:
+        if cita_doctor.hora_cita and ':' in cita_doctor.hora_cita:
+            hora_key = cita_doctor.hora_cita.split(':')[0].zfill(2) + ":00"
+            if hora_key in grid_doctor and cita_doctor.fecha_cita in grid_doctor[hora_key]:
+                grid_doctor[hora_key][cita_doctor.fecha_cita].append(cita_doctor)
 
     dias_info = list(zip(dias, dias_str))
 
@@ -829,6 +1054,7 @@ def calendario():
         dias_info=dias_info,
         horas=horas,
         grid=grid,
+        grid_doctor=grid_doctor,
         semana_anterior=semana_anterior,
         semana_siguiente=semana_siguiente
     )
@@ -1086,6 +1312,40 @@ def enviar_solicitud_en_espera(number):
                 "especialistas estén ocupados en este momento.\n\n"
                 "En cuanto sea posible, te confirmaremos tu fecha y hora "
                 "por este mismo medio. ¡Gracias por tu paciencia! 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
+def enviar_solicitud_doctor_recibida(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "👋 Hemos recibido tu solicitud, requiere autorización. "
+                "En breve uno de nuestros especialistas la revisará."
+            )
+        }
+    }
+    enviar_payload(data)
+
+def enviar_ya_tiene_solicitud_doctor(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "ℹ️ Ya tienes una solicitud en revisión. En cuanto sea "
+                "autorizada, te lo haremos saber por este mismo medio."
             )
         }
     }
