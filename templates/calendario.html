@@ -17,6 +17,7 @@
             --bg: #f6f8f8;
             --card: #ffffff;
             --line: #e6ebe9;
+            --grape: #8e44ad;
         }
         * { box-sizing: border-box; }
         body { font-family: 'Inter', Arial, sans-serif; margin: 30px; background: var(--bg); color: var(--ink); }
@@ -49,6 +50,7 @@
         .celda-asistio { background: #2e7d32; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
         .celda-no-asistio { background: #757575; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
         .celda-cancelada { background: #c62828; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-doctor { background: var(--grape); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
         .btn-borrar-registro { position: absolute; top: 1px; right: 2px; background: none; border: none; color: white; opacity: 0.7; font-size: 11px; cursor: pointer; padding: 0 2px; margin: 0; }
         .btn-borrar-registro:hover { opacity: 1; }
         .form-borrar { display: inline; margin: 0; padding: 0; }
@@ -60,6 +62,7 @@
         .cuadro-asistio { background: #2e7d32; }
         .cuadro-no-asistio { background: #757575; }
         .cuadro-cancelada { background: #c62828; }
+        .cuadro-doctor { background: var(--grape); }
     </style>
 </head>
 <body>
@@ -91,7 +94,8 @@
         <td>
             {% set citas_celda = grid[hora][dia_str] %}
             {% if citas_celda %}
-                {% for cita in citas_celda %}
+                {% for item in citas_celda %}
+                    {% set cita = item.obj %}
                     {% if cita.estado == 'confirmada' %}
                         <div class="celda-confirmada">
                             <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
@@ -129,7 +133,24 @@
                         </div>
                     {% endif %}
                 {% endfor %}
-            {% else %}
+            {% endif %}
+
+            {% set citas_doctor_celda = grid_doctor[hora][dia_str] %}
+            {% if citas_doctor_celda %}
+                {% for cd in citas_doctor_celda %}
+                    <div class="celda-doctor">
+                        <form method="POST" action="/quitar_cita_doctor" class="form-borrar"
+                              onsubmit="return confirm('¿Quitar esta cita con médico referido? Se eliminará también del calendario de Google. Esta acción no se puede deshacer.');">
+                            <input type="hidden" name="cita_doctor_id" value="{{ cd.id }}">
+                            <button type="submit" class="btn-borrar-registro" title="Quitar">✕</button>
+                        </form>
+                        <span class="celda-nombre">🩺 {{ cd.paciente_nombre or 'Sin nombre' }}</span>
+                        <span class="celda-hora">{{ cd.hora_cita }}</span>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if not citas_celda and not citas_doctor_celda %}
                 <div class="celda-vacia">—</div>
             {% endif %}
         </td>
@@ -148,6 +169,8 @@
     <span class="cuadro-no-asistio"></span> Paciente no asistió
     &nbsp;&nbsp;&nbsp;
     <span class="cuadro-cancelada"></span> Cita cancelada
+    &nbsp;&nbsp;&nbsp;
+    <span class="cuadro-doctor"></span> Cita con médico referido
     <br><br>
     <em>Si dos o más pacientes coinciden en la misma hora y día (por ejemplo, con distintos especialistas), todas sus citas se muestran apiladas dentro de la misma casilla.</em>
 </div>
