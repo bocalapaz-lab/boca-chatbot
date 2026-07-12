@@ -19,6 +19,8 @@
             --card: #ffffff;
             --line: #e6ebe9;
             --coral: #e0703f;
+            --grape: #8e44ad;
+            --grape-light: #f3e8f7;
         }
 
         * { box-sizing: border-box; }
@@ -56,6 +58,10 @@
             display: inline-block;
         }
 
+        h2.h2-grape::before {
+            background: var(--grape);
+        }
+
         table { width: 100%; border-collapse: collapse; background: var(--card); margin-bottom: 30px; }
         th, td { border: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
         th { background: var(--teal-100); color: var(--teal-900); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -79,6 +85,7 @@
         .panel-cita-confirmada { border-left: 4px solid #2e7d32; }
         .panel-atencion { border-left: 4px solid var(--coral); }
         .panel-llamada { border-left: 4px solid #6a1b9a; }
+        .panel-doctor { border-left: 4px solid var(--grape); background: var(--grape-light); }
 
         .sin-pendientes {
             color: var(--ink-soft);
@@ -117,6 +124,8 @@
             font-family: 'Inter', Arial, sans-serif;
         }
 
+        input[type=text].campo-ancho { width: 100%; }
+
         label { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
 
         button {
@@ -142,12 +151,21 @@
         .btn-no-asistio { background: #757575; color: white; }
         .btn-llamada-hecha { background: #6a1b9a; color: white; }
         .btn-quitar-llamada { background: #757575; color: white; }
+        .btn-autorizar { background: var(--grape); color: white; }
+        .btn-quitar-doctor { background: #757575; color: white; }
 
         .numero { font-weight: 700; font-size: 15px; color: var(--ink); }
         .nombre { font-size: 14px; color: var(--ink-soft); margin-top: 2px; }
         .desde { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 
         .form-inline { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 14px;
+            margin-top: 10px;
+        }
+        .form-grid .full { grid-column: 1 / -1; }
         .form-group { display: flex; flex-direction: column; }
         .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 
@@ -192,6 +210,7 @@
             .acciones button { width: 100%; padding: 14px; font-size: 16px; margin-bottom: 4px; }
             .form-inline { flex-direction: column; align-items: stretch; }
             .form-inline input[type=text] { width: 100%; box-sizing: border-box; }
+            .form-grid { grid-template-columns: 1fr; }
             .panel { padding: 16px; }
         }
     </style>
@@ -328,12 +347,77 @@
     <p class="sin-pendientes">No hay conversaciones pendientes de atención en este momento.</p>
 {% endif %}
 
+<!-- SECCIÓN 5: SOLICITUDES DE MÉDICOS REFERIDOS -->
+<h2 class="h2-grape">🩺 Solicitudes de médicos referidos</h2>
+{% if citas_doctor_pendientes %}
+    {% for cd in citas_doctor_pendientes %}
+    <div class="panel panel-doctor">
+        <div class="numero">📱 {{ cd.doctor_numero }}</div>
+        <div class="desde">Solicitud recibida el: {{ cd.creada_en.strftime('%d/%m/%Y a las %H:%M') }}</div>
+
+        <form action="/autorizar_cita_doctor" method="POST"
+              onsubmit="return confirm('¿Autorizar esta solicitud con los datos capturados?');">
+            <input type="hidden" name="cita_doctor_id" value="{{ cd.id }}">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nombre del doctor</label>
+                    <input type="text" name="doctor_nombre" class="campo-ancho" placeholder="Dr. Juan Pérez" required>
+                </div>
+                <div class="form-group">
+                    <label>Nombre del paciente</label>
+                    <input type="text" name="paciente_nombre" class="campo-ancho" placeholder="Nombre del paciente" required>
+                </div>
+                <div class="form-group full">
+                    <label>Lugar / consultorio</label>
+                    <input type="text" name="lugar" class="campo-ancho" placeholder="Consultorio, dirección o clínica">
+                </div>
+                <div class="form-group">
+                    <label>Fecha (DD/MM/AAAA)</label>
+                    <input type="text" name="fecha" class="campo-ancho" placeholder="10/08/2026" required>
+                </div>
+                <div class="form-group">
+                    <label>Hora (HH:MM)</label>
+                    <input type="text" name="hora" class="campo-ancho" placeholder="10:00" required>
+                </div>
+            </div>
+            <button type="submit" class="btn-autorizar">✅ Autorizar</button>
+        </form>
+
+        <form action="/rechazar_cita_doctor" method="POST"
+              onsubmit="return confirm('¿Rechazar esta solicitud? Se le notificará que no se encontró información.');">
+            <input type="hidden" name="cita_doctor_id" value="{{ cd.id }}">
+            <button type="submit" class="btn-rechazar">❌ Rechazar</button>
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="sin-pendientes">No hay solicitudes de médicos referidos pendientes.</p>
+{% endif %}
+
+<!-- SECCIÓN 6: CITAS CON MÉDICOS REFERIDOS -->
+<h2 class="h2-grape">🩺 Citas con médicos referidos</h2>
+{% if citas_doctor_confirmadas %}
+    {% for cd in citas_doctor_confirmadas %}
+    <div class="panel panel-doctor">
+        <div class="numero">📱 {{ cd.doctor_numero }}</div>
+        <div class="nombre">👨‍⚕️ Dr(a). {{ cd.doctor_nombre or 'Sin nombre' }}</div>
+        <div class="nombre">🙂 Paciente: {{ cd.paciente_nombre or 'Sin nombre' }}</div>
+        <div class="desde">📍 {{ cd.lugar or 'Sin especificar' }}</div>
+        <div class="desde">📅 {{ cd.fecha_cita }} a las ⏰ {{ cd.hora_cita }}</div>
+        <form action="/quitar_cita_doctor" method="POST"
+              onsubmit="return confirm('¿Quitar este registro? Se eliminará también del calendario de Google. Esta acción no se puede deshacer.');">
+            <input type="hidden" name="cita_doctor_id" value="{{ cd.id }}">
+            <button type="submit" class="btn-quitar-doctor">🗑️ Quitar</button>
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="sin-pendientes">No hay citas con médicos referidos activas.</p>
+{% endif %}
+
 </body>
 
 <script>
-    // Antes de confirmar una cita, muestra los datos completos
-    // (nombre, número, fecha y hora) para que puedas revisarlos
-    // y evitar equivocarte al capturarlos.
     function confirmarDatosCita(form) {
         var nombre = form.dataset.nombre;
         var numero = form.dataset.numero;
@@ -348,10 +432,6 @@
         return confirm(mensaje);
     }
 
-    // Actualiza la página automáticamente cada 30 segundos, para ver
-    // solicitudes y mensajes nuevos sin tener que refrescar a mano.
-    // Se PAUSA si el usuario está escribiendo en un textarea o input,
-    // para no borrar una respuesta a medio escribir.
     setInterval(function () {
         var elementoActivo = document.activeElement;
         var estaEscribiendo = elementoActivo && (
