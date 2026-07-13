@@ -55,6 +55,7 @@
         .btn-borrar-registro:hover { opacity: 1; }
         .form-borrar { display: inline; margin: 0; padding: 0; }
         .celda-nombre { font-weight: bold; display: block; font-size: 11px; }
+        .celda-subtexto { display: block; font-size: 10px; opacity: 0.9; line-height: 1.3; }
         .celda-hora { font-size: 10px; opacity: 0.9; }
         .leyenda { margin-top: 15px; font-size: 13px; color: var(--ink-soft); }
         .leyenda span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
@@ -144,7 +145,9 @@
                             <input type="hidden" name="cita_doctor_id" value="{{ cd.id }}">
                             <button type="submit" class="btn-borrar-registro" title="Quitar">✕</button>
                         </form>
-                        <span class="celda-nombre">🩺 {{ cd.paciente_nombre or 'Sin nombre' }}</span>
+                        <span class="celda-nombre">🩺 {{ cd.doctor_nombre or 'Sin nombre' }}</span>
+                        <span class="celda-subtexto">Paciente: {{ cd.paciente_nombre or 'Sin nombre' }}</span>
+                        <span class="celda-subtexto">{{ cd.lugar or 'Sin lugar' }}</span>
                         <span class="celda-hora">{{ cd.hora_cita }}</span>
                     </div>
                 {% endfor %}
