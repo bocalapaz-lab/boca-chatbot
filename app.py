@@ -342,9 +342,12 @@ def crear_evento_calendar_doctor(cita_doctor):
         fin = inicio + timedelta(hours=1)
 
         evento = {
-            'summary': f"Ref: {cita_doctor.paciente_nombre or 'Paciente'} (Dr. {cita_doctor.doctor_nombre or ''})",
+            'summary': (
+                f"🩺 {cita_doctor.doctor_nombre or 'Doctor'} — "
+                f"Paciente: {cita_doctor.paciente_nombre or 'Sin nombre'}"
+            ),
             'description': (
-                f'Paciente referido de: {cita_doctor.doctor_nombre or "Sin nombre"}\n'
+                f'Doctor: {cita_doctor.doctor_nombre or "Sin nombre"}\n'
                 f'Paciente: {cita_doctor.paciente_nombre or "Sin nombre"}\n'
                 f'Lugar: {cita_doctor.lugar or "Sin especificar"}\n'
                 f'Teléfono del doctor: {cita_doctor.doctor_numero}'
@@ -612,17 +615,24 @@ def enviar_recordatorios():
     for cita_doctor in citas_doctor_hoy:
         paciente_nombre = cita_doctor.paciente_nombre or "tu paciente"
         lugar = cita_doctor.lugar or "el lugar acordado"
-        texto_recordatorio = (
-            f"🩺 *Recordatorio de consulta*\n\n"
-            f"Hoy tienes consulta con {paciente_nombre} a las "
-            f"{cita_doctor.hora_cita} en {lugar}."
-        )
         data_doctor = {
             "messaging_product": "whatsapp",
-            "recipient_type": "individual",
             "to": cita_doctor.doctor_numero,
-            "type": "text",
-            "text": {"preview_url": False, "body": texto_recordatorio}
+            "type": "template",
+            "template": {
+                "name": "recordatorio_cita_doctor_boca",
+                "language": {"code": "es_MX"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": paciente_nombre},
+                            {"type": "text", "text": cita_doctor.hora_cita},
+                            {"type": "text", "text": lugar}
+                        ]
+                    }
+                ]
+            }
         }
         enviar_payload(data_doctor)
         cita_doctor.recordatorio_enviado = True
@@ -765,7 +775,7 @@ def autorizar_cita_doctor():
         enviar_payload(data)
         agregar_mensajes_log(
             f"CITA MEDICO REFERIDO AUTORIZADA -> {cita_doctor.doctor_numero} | "
-            f"Dr. {doctor_nombre} | Paciente: {paciente_nombre} | {fecha} a las {hora}"
+            f"{doctor_nombre} | Paciente: {paciente_nombre} | {fecha} a las {hora}"
         )
 
     return redirect('/')
@@ -807,7 +817,7 @@ def quitar_cita_doctor():
         eliminar_evento_calendar(cita_doctor.google_event_id)
         agregar_mensajes_log(
             f"CITA MEDICO REFERIDO ELIMINADA -> {cita_doctor.doctor_numero} | "
-            f"Dr. {cita_doctor.doctor_nombre or 'Sin nombre'} | Cita del {info}"
+            f"{cita_doctor.doctor_nombre or 'Sin nombre'} | Cita del {info}"
         )
         db.session.delete(cita_doctor)
         db.session.commit()
