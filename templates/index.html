@@ -21,6 +21,10 @@
             --coral: #e0703f;
             --grape: #8e44ad;
             --grape-light: #f3e8f7;
+            --esp-yacxy: #1565c0;
+            --esp-ruben: #8e44ad;
+            --esp-gaby: #e2607a;
+            --esp-sin: #9aa5a3;
         }
 
         * { box-sizing: border-box; }
@@ -82,10 +86,52 @@
         }
 
         .panel-cita-pendiente { border-left: 4px solid var(--teal-500); }
-        .panel-cita-confirmada { border-left: 4px solid #2e7d32; }
         .panel-atencion { border-left: 4px solid var(--coral); }
         .panel-llamada { border-left: 4px solid #6a1b9a; }
         .panel-doctor { border-left: 4px solid var(--grape); background: var(--grape-light); }
+
+        .panel-especialista-yacxy { border-left: 4px solid var(--esp-yacxy); }
+        .panel-especialista-ruben { border-left: 4px solid var(--esp-ruben); }
+        .panel-especialista-gaby { border-left: 4px solid var(--esp-gaby); }
+        .panel-especialista-sin { border-left: 4px solid var(--esp-sin); }
+
+        .badge-especialista {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+            margin-top: 6px;
+        }
+        .badge-yacxy { background: var(--esp-yacxy); }
+        .badge-ruben { background: var(--esp-ruben); }
+        .badge-gaby { background: var(--esp-gaby); }
+
+        .selector-especialista {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .opcion-especialista {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 2px solid var(--line);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--ink-soft);
+            transition: all 0.15s ease;
+            background: var(--card);
+        }
+        .opcion-especialista input { margin: 0; }
+        .opcion-yacxy:has(input:checked) { border-color: var(--esp-yacxy); background: var(--esp-yacxy); color: white; }
+        .opcion-ruben:has(input:checked) { border-color: var(--esp-ruben); background: var(--esp-ruben); color: white; }
+        .opcion-gaby:has(input:checked) { border-color: var(--esp-gaby); background: var(--esp-gaby); color: white; }
 
         .sin-pendientes {
             color: var(--ink-soft);
@@ -249,8 +295,20 @@
                     <label>Hora (HH:MM)</label>
                     <input type="text" name="hora" placeholder="10:00" required>
                 </div>
-                <button type="submit" class="btn-confirmar">✅ Confirmar cita</button>
             </div>
+            <label>Especialista</label>
+            <div class="selector-especialista">
+                <label class="opcion-especialista opcion-yacxy">
+                    <input type="radio" name="especialista" value="yacxy" required> Yacxy
+                </label>
+                <label class="opcion-especialista opcion-ruben">
+                    <input type="radio" name="especialista" value="ruben" required> Rubén
+                </label>
+                <label class="opcion-especialista opcion-gaby">
+                    <input type="radio" name="especialista" value="gaby" required> Gaby
+                </label>
+            </div>
+            <button type="submit" class="btn-confirmar">✅ Confirmar cita</button>
         </form>
 
         <form action="/rechazar_solicitud" method="POST"
@@ -268,9 +326,12 @@
 <h2>Citas confirmadas</h2>
 {% if citas_confirmadas %}
     {% for cita in citas_confirmadas %}
-    <div class="panel panel-cita-confirmada">
+    <div class="panel {{ 'panel-especialista-' ~ cita.especialista if cita.especialista else 'panel-especialista-sin' }}">
         <div class="numero">📱 {{ cita.numero }}</div>
         <div class="nombre">👤 {{ cita.nombre or 'Sin nombre' }}</div>
+        {% if cita.especialista %}
+        <span class="badge-especialista badge-{{ cita.especialista }}">{{ especialistas.get(cita.especialista, cita.especialista) }}</span>
+        {% endif %}
         <div class="desde">📅 {{ cita.fecha_cita }} a las ⏰ {{ cita.hora_cita }}</div>
         <div class="acciones">
             <form action="/marcar_asistio" method="POST"
@@ -379,6 +440,20 @@
                     <label>Hora (HH:MM)</label>
                     <input type="text" name="hora" class="campo-ancho" placeholder="10:00" required>
                 </div>
+                <div class="form-group full">
+                    <label>Especialista que atenderá</label>
+                    <div class="selector-especialista">
+                        <label class="opcion-especialista opcion-yacxy">
+                            <input type="radio" name="especialista" value="yacxy" required> Yacxy
+                        </label>
+                        <label class="opcion-especialista opcion-ruben">
+                            <input type="radio" name="especialista" value="ruben" required> Rubén
+                        </label>
+                        <label class="opcion-especialista opcion-gaby">
+                            <input type="radio" name="especialista" value="gaby" required> Gaby
+                        </label>
+                    </div>
+                </div>
             </div>
             <button type="submit" class="btn-autorizar">✅ Autorizar</button>
         </form>
@@ -398,10 +473,13 @@
 <h2 class="h2-grape">🩺 Citas con médicos referidos</h2>
 {% if citas_doctor_confirmadas %}
     {% for cd in citas_doctor_confirmadas %}
-    <div class="panel panel-doctor">
+    <div class="panel {{ 'panel-especialista-' ~ cd.especialista if cd.especialista else 'panel-especialista-sin' }}">
         <div class="numero">📱 {{ cd.doctor_numero }}</div>
         <div class="nombre">👨‍⚕️ {{ cd.doctor_nombre or 'Sin nombre' }}</div>
         <div class="nombre">🙂 Paciente: {{ cd.paciente_nombre or 'Sin nombre' }}</div>
+        {% if cd.especialista %}
+        <span class="badge-especialista badge-{{ cd.especialista }}">Atiende: {{ especialistas.get(cd.especialista, cd.especialista) }}</span>
+        {% endif %}
         <div class="desde">📍 {{ cd.lugar or 'Sin especificar' }}</div>
         <div class="desde">📅 {{ cd.fecha_cita }} a las ⏰ {{ cd.hora_cita }}</div>
         <form action="/quitar_cita_doctor" method="POST"
@@ -423,12 +501,15 @@
         var numero = form.dataset.numero;
         var fecha = form.querySelector('input[name="fecha"]').value;
         var hora = form.querySelector('input[name="hora"]').value;
+        var especialistaInput = form.querySelector('input[name="especialista"]:checked');
+        var especialista = especialistaInput ? especialistaInput.closest('label').textContent.trim() : 'Sin seleccionar';
         var mensaje =
             "¿Confirmas estos datos de la cita?\n\n" +
             "👤 Nombre: " + nombre + "\n" +
             "📱 Número: " + numero + "\n" +
             "📅 Fecha: " + fecha + "\n" +
-            "⏰ Hora: " + hora;
+            "⏰ Hora: " + hora + "\n" +
+            "🩺 Especialista: " + especialista;
         return confirm(mensaje);
     }
 
