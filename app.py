@@ -43,6 +43,7 @@ class Cita(db.Model):
     hora_cita = db.Column(db.String, nullable=True)
     recordatorio_enviado = db.Column(db.Boolean, default=False)
     google_event_id = db.Column(db.String, nullable=True)
+    especialista = db.Column(db.String, nullable=True)
     creada_en = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Llamada(db.Model):
@@ -68,6 +69,7 @@ class CitaDoctor(db.Model):
     hora_cita = db.Column(db.String, nullable=True)
     estado = db.Column(db.String, default="pendiente_autorizacion")
     google_event_id = db.Column(db.String, nullable=True)
+    especialista = db.Column(db.String, nullable=True)
     recordatorio_enviado = db.Column(db.Boolean, default=False)
     creada_en = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -80,12 +82,24 @@ with app.app_context():
         with db.engine.connect() as conexion:
             conexion.execute(db.text('ALTER TABLE cita ADD COLUMN google_event_id VARCHAR'))
             conexion.commit()
+    if 'especialista' not in columnas_cita:
+        with db.engine.connect() as conexion:
+            conexion.execute(db.text('ALTER TABLE cita ADD COLUMN especialista VARCHAR'))
+            conexion.commit()
 
     columnas_log = [col['name'] for col in inspector.get_columns('log')]
     if 'es_tecnico' not in columnas_log:
         with db.engine.connect() as conexion:
             conexion.execute(db.text('ALTER TABLE log ADD COLUMN es_tecnico BOOLEAN DEFAULT 0'))
             conexion.commit()
+
+    tablas_existentes = inspector.get_table_names()
+    if 'cita_doctor' in tablas_existentes:
+        columnas_cita_doctor = [col['name'] for col in inspector.get_columns('cita_doctor')]
+        if 'especialista' not in columnas_cita_doctor:
+            with db.engine.connect() as conexion:
+                conexion.execute(db.text('ALTER TABLE cita_doctor ADD COLUMN especialista VARCHAR'))
+                conexion.commit()
 
 def ordenar_por_fecha_y_hora(registros):
     return sorted(registros, key=lambda x: x.fecha_y_hora, reverse=True)
@@ -203,7 +217,8 @@ def index():
         citas_confirmadas=citas_confirmadas,
         llamadas_pendientes=llamadas_pendientes,
         citas_doctor_pendientes=citas_doctor_pendientes,
-        citas_doctor_confirmadas=citas_doctor_confirmadas
+        citas_doctor_confirmadas=citas_doctor_confirmadas,
+        especialistas=ESPECIALISTAS
     )
 
 @app.route('/registro_mensajes')
@@ -277,11 +292,21 @@ def obtener_cita_activa(numero):
 GOOGLE_CREDENTIALS_PATH = '/etc/secrets/google-credentials.json'
 GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID')
 
-COLOR_CALENDAR_CONFIRMADA = '9'
 COLOR_CALENDAR_ASISTIO = '10'
 COLOR_CALENDAR_NO_ASISTIO = '8'
 COLOR_CALENDAR_CANCELADA = '11'
-COLOR_CALENDAR_MEDICO_REFERIDO = '3'
+
+ESPECIALISTAS = {
+    'yacxy': 'Yacxy',
+    'ruben': 'Rubén',
+    'gaby': 'Gaby',
+}
+
+COLOR_ESPECIALISTA = {
+    'yacxy': '9',   # Blueberry (azul)
+    'ruben': '3',   # Grape (morado)
+    'gaby': '4',    # Flamingo (coral)
+}
 
 def obtener_servicio_calendar():
     if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
@@ -306,11 +331,15 @@ def crear_evento_calendar(cita):
         inicio = zona_mexico.localize(inicio_naive)
         fin = inicio + timedelta(hours=1)
 
+        nombre_especialista = ESPECIALISTAS.get(cita.especialista, 'Sin asignar')
+        color_id = COLOR_ESPECIALISTA.get(cita.especialista, COLOR_CALENDAR_NO_ASISTIO)
+
         evento = {
-            'summary': cita.nombre or "Paciente",
+            'summary': f"BOCA — {cita.nombre or 'Paciente'} — {nombre_especialista}",
             'description': (
                 f'Paciente: {cita.nombre or "Sin nombre"}\n'
-                f'Teléfono: {cita.numero}'
+                f'Teléfono: {cita.numero}\n'
+                f'Especialista: {nombre_especialista}'
             ),
             'location': (
                 'Av. Rosendo Márquez 16, 50 Doctors, Torres Médicas V, '
@@ -318,7 +347,7 @@ def crear_evento_calendar(cita):
             ),
             'start': {'dateTime': inicio.isoformat()},
             'end': {'dateTime': fin.isoformat()},
-            'colorId': COLOR_CALENDAR_CONFIRMADA,
+            'colorId': color_id,
         }
         resultado = servicio.events().insert(
             calendarId=GOOGLE_CALENDAR_ID, body=evento
@@ -341,21 +370,26 @@ def crear_evento_calendar_doctor(cita_doctor):
         inicio = zona_mexico.localize(inicio_naive)
         fin = inicio + timedelta(hours=1)
 
+        nombre_especialista = ESPECIALISTAS.get(cita_doctor.especialista, 'Sin asignar')
+        color_id = COLOR_ESPECIALISTA.get(cita_doctor.especialista, COLOR_CALENDAR_NO_ASISTIO)
+
         evento = {
             'summary': (
                 f"🩺 {cita_doctor.doctor_nombre or 'Doctor'} — "
-                f"Paciente: {cita_doctor.paciente_nombre or 'Sin nombre'}"
+                f"Paciente: {cita_doctor.paciente_nombre or 'Sin nombre'} — "
+                f"Atiende: {nombre_especialista}"
             ),
             'description': (
                 f'Doctor: {cita_doctor.doctor_nombre or "Sin nombre"}\n'
                 f'Paciente: {cita_doctor.paciente_nombre or "Sin nombre"}\n'
                 f'Lugar: {cita_doctor.lugar or "Sin especificar"}\n'
+                f'Atiende: {nombre_especialista}\n'
                 f'Teléfono del doctor: {cita_doctor.doctor_numero}'
             ),
             'location': cita_doctor.lugar or '',
             'start': {'dateTime': inicio.isoformat()},
             'end': {'dateTime': fin.isoformat()},
-            'colorId': COLOR_CALENDAR_MEDICO_REFERIDO,
+            'colorId': color_id,
         }
         resultado = servicio.events().insert(
             calendarId=GOOGLE_CALENDAR_ID, body=evento
@@ -654,12 +688,16 @@ def confirmar_cita():
     cita_id = request.form.get('cita_id')
     fecha = normalizar_fecha(request.form.get('fecha'))
     hora = normalizar_hora(request.form.get('hora'))
+    especialista = request.form.get('especialista')
+    if especialista not in ESPECIALISTAS:
+        especialista = None
 
     cita = Cita.query.get(cita_id)
-    if cita and fecha and hora:
+    if cita and fecha and hora and especialista:
         cita.estado = "confirmada"
         cita.fecha_cita = fecha
         cita.hora_cita = hora
+        cita.especialista = especialista
         db.session.commit()
 
         cita.google_event_id = crear_evento_calendar(cita)
@@ -742,14 +780,18 @@ def autorizar_cita_doctor():
     lugar = (request.form.get('lugar') or '').strip()
     fecha = normalizar_fecha(request.form.get('fecha'))
     hora = normalizar_hora(request.form.get('hora'))
+    especialista = request.form.get('especialista')
+    if especialista not in ESPECIALISTAS:
+        especialista = None
 
     cita_doctor = CitaDoctor.query.get(cita_doctor_id)
-    if cita_doctor and doctor_nombre and paciente_nombre and fecha and hora:
+    if cita_doctor and doctor_nombre and paciente_nombre and fecha and hora and especialista:
         cita_doctor.doctor_nombre = doctor_nombre
         cita_doctor.paciente_nombre = paciente_nombre
         cita_doctor.lugar = lugar
         cita_doctor.fecha_cita = fecha
         cita_doctor.hora_cita = hora
+        cita_doctor.especialista = especialista
         cita_doctor.estado = "confirmada"
         db.session.commit()
 
@@ -1066,7 +1108,8 @@ def calendario():
         grid=grid,
         grid_doctor=grid_doctor,
         semana_anterior=semana_anterior,
-        semana_siguiente=semana_siguiente
+        semana_siguiente=semana_siguiente,
+        especialistas=ESPECIALISTAS
     )
 
 @app.route('/responder', methods=['POST'])
