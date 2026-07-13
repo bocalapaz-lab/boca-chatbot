@@ -400,7 +400,7 @@
     {% for cd in citas_doctor_confirmadas %}
     <div class="panel panel-doctor">
         <div class="numero">📱 {{ cd.doctor_numero }}</div>
-        <div class="nombre">👨‍⚕️ Dr(a). {{ cd.doctor_nombre or 'Sin nombre' }}</div>
+        <div class="nombre">👨‍⚕️ {{ cd.doctor_nombre or 'Sin nombre' }}</div>
         <div class="nombre">🙂 Paciente: {{ cd.paciente_nombre or 'Sin nombre' }}</div>
         <div class="desde">📍 {{ cd.lugar or 'Sin especificar' }}</div>
         <div class="desde">📅 {{ cd.fecha_cita }} a las ⏰ {{ cd.hora_cita }}</div>
