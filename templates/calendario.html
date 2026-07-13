@@ -17,7 +17,10 @@
             --bg: #f6f8f8;
             --card: #ffffff;
             --line: #e6ebe9;
-            --grape: #8e44ad;
+            --esp-yacxy: #1565c0;
+            --esp-ruben: #8e44ad;
+            --esp-gaby: #e2607a;
+            --esp-sin: #9aa5a3;
         }
         * { box-sizing: border-box; }
         body { font-family: 'Inter', Arial, sans-serif; margin: 30px; background: var(--bg); color: var(--ink); }
@@ -46,11 +49,13 @@
         .hora-col { background: var(--teal-100); color: var(--teal-900); font-weight: 700; width: 60px; position: sticky; left: 0; z-index: 1; }
         thead th.hora-col { z-index: 3; }
         .celda-vacia { color: #d7dedc; height: 30px; min-width: 90px; }
-        .celda-confirmada { background: var(--teal-700); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-asistio { background: #2e7d32; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-no-asistio { background: #757575; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-cancelada { background: #c62828; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-doctor { background: var(--grape); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-especialista-yacxy { background: var(--esp-yacxy); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-especialista-ruben { background: var(--esp-ruben); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-especialista-gaby { background: var(--esp-gaby); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-sin-especialista { background: var(--esp-sin); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
+        .celda-asistio { background: #2e7d32; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; opacity: 0.55; }
+        .celda-no-asistio { background: #757575; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; opacity: 0.55; }
+        .celda-cancelada { background: #c62828; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; opacity: 0.55; }
         .btn-borrar-registro { position: absolute; top: 1px; right: 2px; background: none; border: none; color: white; opacity: 0.7; font-size: 11px; cursor: pointer; padding: 0 2px; margin: 0; }
         .btn-borrar-registro:hover { opacity: 1; }
         .form-borrar { display: inline; margin: 0; padding: 0; }
@@ -59,11 +64,12 @@
         .celda-hora { font-size: 10px; opacity: 0.9; }
         .leyenda { margin-top: 15px; font-size: 13px; color: var(--ink-soft); }
         .leyenda span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
-        .cuadro-confirmada { background: var(--teal-700); }
-        .cuadro-asistio { background: #2e7d32; }
-        .cuadro-no-asistio { background: #757575; }
-        .cuadro-cancelada { background: #c62828; }
-        .cuadro-doctor { background: var(--grape); }
+        .cuadro-yacxy { background: var(--esp-yacxy); }
+        .cuadro-ruben { background: var(--esp-ruben); }
+        .cuadro-gaby { background: var(--esp-gaby); }
+        .cuadro-asistio { background: #2e7d32; opacity: 0.55; }
+        .cuadro-no-asistio { background: #757575; opacity: 0.55; }
+        .cuadro-cancelada { background: #c62828; opacity: 0.55; }
     </style>
 </head>
 <body>
@@ -98,8 +104,9 @@
                 {% for item in citas_celda %}
                     {% set cita = item.obj %}
                     {% if cita.estado == 'confirmada' %}
-                        <div class="celda-confirmada">
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
+                        <div class="{{ 'celda-especialista-' ~ cita.especialista if cita.especialista else 'celda-sin-especialista' }}">
+                            <span class="celda-nombre">BOCA · {{ cita.nombre or 'Sin nombre' }}</span>
+                            <span class="celda-subtexto">{{ especialistas.get(cita.especialista, 'Sin asignar') }}</span>
                             <span class="celda-hora">{{ cita.hora_cita }}</span>
                         </div>
                     {% elif cita.estado == 'asistio' %}
@@ -139,7 +146,7 @@
             {% set citas_doctor_celda = grid_doctor[hora][dia_str] %}
             {% if citas_doctor_celda %}
                 {% for cd in citas_doctor_celda %}
-                    <div class="celda-doctor">
+                    <div class="{{ 'celda-especialista-' ~ cd.especialista if cd.especialista else 'celda-sin-especialista' }}">
                         <form method="POST" action="/quitar_cita_doctor" class="form-borrar"
                               onsubmit="return confirm('¿Quitar esta cita con médico referido? Se eliminará también del calendario de Google. Esta acción no se puede deshacer.');">
                             <input type="hidden" name="cita_doctor_id" value="{{ cd.id }}">
@@ -148,6 +155,7 @@
                         <span class="celda-nombre">🩺 {{ cd.doctor_nombre or 'Sin nombre' }}</span>
                         <span class="celda-subtexto">Paciente: {{ cd.paciente_nombre or 'Sin nombre' }}</span>
                         <span class="celda-subtexto">{{ cd.lugar or 'Sin lugar' }}</span>
+                        <span class="celda-subtexto">{{ especialistas.get(cd.especialista, 'Sin asignar') }}</span>
                         <span class="celda-hora">{{ cd.hora_cita }}</span>
                     </div>
                 {% endfor %}
@@ -165,15 +173,17 @@
 </div>
 
 <div class="leyenda">
-    <span class="cuadro-confirmada"></span> Cita confirmada (pendiente de atender)
+    <span class="cuadro-yacxy"></span> Yacxy
     &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-asistio"></span> Paciente atendido
+    <span class="cuadro-ruben"></span> Rubén
     &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-no-asistio"></span> Paciente no asistió
+    <span class="cuadro-gaby"></span> Gaby
     &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-cancelada"></span> Cita cancelada
+    <span class="cuadro-asistio"></span> Paciente atendido (color tenue, ya pasó)
     &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-doctor"></span> Cita con médico referido
+    <span class="cuadro-no-asistio"></span> Paciente no asistió (color tenue, ya pasó)
+    &nbsp;&nbsp;&nbsp;
+    <span class="cuadro-cancelada"></span> Cita cancelada (color tenue, ya pasó)
     <br><br>
     <em>Si dos o más pacientes coinciden en la misma hora y día (por ejemplo, con distintos especialistas), todas sus citas se muestran apiladas dentro de la misma casilla.</em>
 </div>
