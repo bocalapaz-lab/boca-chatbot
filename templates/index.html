@@ -514,13 +514,25 @@
         return confirm(mensaje);
     }
 
+    var formularioSucio = false;
+
+    document.addEventListener('input', function (evento) {
+        if (evento.target.tagName === 'TEXTAREA' || evento.target.tagName === 'INPUT') {
+            formularioSucio = true;
+        }
+    });
+
+    document.addEventListener('submit', function () {
+        formularioSucio = false;
+    });
+
+    // Actualiza la página automáticamente cada 30 segundos, para ver
+    // solicitudes y mensajes nuevos sin tener que refrescar a mano.
+    // Se PAUSA si hay CUALQUIER campo con datos sin guardar en toda la
+    // página (texto escrito, especialista seleccionado, etc.), sin
+    // importar en qué campo esté el foco justo en ese instante.
     setInterval(function () {
-        var elementoActivo = document.activeElement;
-        var estaEscribiendo = elementoActivo && (
-            elementoActivo.tagName === 'TEXTAREA' ||
-            (elementoActivo.tagName === 'INPUT' && elementoActivo.type === 'text')
-        );
-        if (!estaEscribiendo) {
+        if (!formularioSucio) {
             window.location.reload();
         }
     }, 30000);
