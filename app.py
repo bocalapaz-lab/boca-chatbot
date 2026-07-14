@@ -292,10 +292,6 @@ def obtener_cita_activa(numero):
 GOOGLE_CREDENTIALS_PATH = '/etc/secrets/google-credentials.json'
 GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID')
 
-COLOR_CALENDAR_ASISTIO = '10'
-COLOR_CALENDAR_NO_ASISTIO = '8'
-COLOR_CALENDAR_CANCELADA = '11'
-
 ESPECIALISTAS = {
     'yacxy': 'Yacxy',
     'ruben': 'Rubén',
@@ -307,6 +303,8 @@ COLOR_ESPECIALISTA = {
     'ruben': '3',   # Grape (morado)
     'gaby': '4',    # Flamingo (coral)
 }
+
+COLOR_SIN_ESPECIALISTA = '8'  # Graphite (gris neutro), solo para citas viejas sin especialista asignado
 
 def obtener_servicio_calendar():
     if not os.path.isfile(GOOGLE_CREDENTIALS_PATH):
@@ -332,10 +330,10 @@ def crear_evento_calendar(cita):
         fin = inicio + timedelta(hours=1)
 
         nombre_especialista = ESPECIALISTAS.get(cita.especialista, 'Sin asignar')
-        color_id = COLOR_ESPECIALISTA.get(cita.especialista, COLOR_CALENDAR_NO_ASISTIO)
+        color_id = COLOR_ESPECIALISTA.get(cita.especialista, COLOR_SIN_ESPECIALISTA)
 
         evento = {
-            'summary': f"BOCA — {cita.nombre or 'Paciente'} — {nombre_especialista}",
+            'summary': f"BOCA - Paciente: {cita.nombre or 'Paciente'}, Atiende: {nombre_especialista}",
             'description': (
                 f'Paciente: {cita.nombre or "Sin nombre"}\n'
                 f'Teléfono: {cita.numero}\n'
@@ -371,7 +369,7 @@ def crear_evento_calendar_doctor(cita_doctor):
         fin = inicio + timedelta(hours=1)
 
         nombre_especialista = ESPECIALISTAS.get(cita_doctor.especialista, 'Sin asignar')
-        color_id = COLOR_ESPECIALISTA.get(cita_doctor.especialista, COLOR_CALENDAR_NO_ASISTIO)
+        color_id = COLOR_ESPECIALISTA.get(cita_doctor.especialista, COLOR_SIN_ESPECIALISTA)
 
         evento = {
             'summary': (
@@ -400,7 +398,7 @@ def crear_evento_calendar_doctor(cita_doctor):
         agregar_mensajes_log(f"Error Google Calendar (crear evento medico referido): {str(e)}", tecnico=True)
         return None
 
-def actualizar_color_evento_calendar(google_event_id, color_id):
+def actualizar_titulo_evento_calendar(google_event_id, nuevo_titulo):
     if not google_event_id:
         return
     servicio = obtener_servicio_calendar()
@@ -410,11 +408,11 @@ def actualizar_color_evento_calendar(google_event_id, color_id):
         servicio.events().patch(
             calendarId=GOOGLE_CALENDAR_ID,
             eventId=google_event_id,
-            body={'colorId': color_id}
+            body={'summary': nuevo_titulo}
         ).execute()
-        agregar_mensajes_log(f"CALENDAR: color actualizado -> {google_event_id} ({color_id})")
+        agregar_mensajes_log(f"CALENDAR: titulo actualizado -> {google_event_id}")
     except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (actualizar color): {str(e)}", tecnico=True)
+        agregar_mensajes_log(f"Error Google Calendar (actualizar titulo): {str(e)}", tecnico=True)
 
 def eliminar_evento_calendar(google_event_id):
     if not google_event_id:
@@ -875,9 +873,9 @@ def cancelar_cita_admin():
         info = f"{cita.fecha_cita} a las {cita.hora_cita}" if cita.fecha_cita else "sin fecha asignada"
         nombre = cita.nombre or "paciente"
         numero = cita.numero
-        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_CANCELADA)
         cita.estado = "cancelada"
         db.session.commit()
+        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — CANCELÓ")
         agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {numero} | {nombre} | Cita del {info}")
 
         mensaje_cancelacion = (
@@ -912,9 +910,9 @@ def marcar_asistio():
     if cita:
         numero = cita.numero
         nombre = cita.nombre or "paciente"
-        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_ASISTIO)
         cita.estado = "asistio"
         db.session.commit()
+        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — ASISTIÓ")
         agregar_mensajes_log(f"CITA ASISTIDA -> {numero} | {nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
 
         mensaje_gracias = (
@@ -948,9 +946,9 @@ def marcar_no_asistio():
         numero = cita.numero
         nombre = cita.nombre or "paciente"
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
-        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_NO_ASISTIO)
         cita.estado = "no_asistio"
         db.session.commit()
+        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — NO ASISTIÓ")
         agregar_mensajes_log(f"CITA NO ASISTIDA -> {numero} | {nombre} | Cita del {info}")
 
         mensaje_no_asistio = (
@@ -1534,9 +1532,9 @@ def confirmar_cancelacion(number, numero_normalizado):
     if cita:
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
         nombre = cita.nombre or "paciente"
-        actualizar_color_evento_calendar(cita.google_event_id, COLOR_CALENDAR_CANCELADA)
         cita.estado = "cancelada"
         db.session.commit()
+        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — CANCELÓ")
         agregar_mensajes_log(f"CITA CANCELADA -> {numero_normalizado} | {nombre} | Cita del {info}")
 
         data = {
