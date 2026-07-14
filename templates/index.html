@@ -272,7 +272,59 @@
     </div>
 </div>
 
-<!-- SECCIÓN 1: CITAS PENDIENTES -->
+<!-- SECCIÓN 1: CONVERSACIONES DE AYUDA PERSONALIZADA -->
+<h2>Conversaciones esperando atención humana</h2>
+{% if conversaciones_activas %}
+    {% for conv in conversaciones_activas %}
+    <div class="panel panel-atencion">
+        <div class="numero">📱 {{ conv.numero }}</div>
+        <div class="nombre">👤 {{ conv.nombre or 'Sin nombre' }}</div>
+        <div class="desde">Esperando desde: {{ conv.desde }}</div>
+        <form action="/responder" method="POST"
+              onsubmit="return confirm('¿Enviar esta respuesta al paciente?');">
+            <input type="hidden" name="numero" value="{{ conv.numero }}">
+            <textarea name="mensaje" placeholder="Escribe tu respuesta aquí..." required></textarea>
+            <br>
+            <button type="submit" class="btn-enviar">📤 Enviar respuesta</button>
+        </form>
+        <form action="/finalizar" method="POST"
+              onsubmit="return confirm('¿Finalizar esta conversación?');">
+            <input type="hidden" name="numero" value="{{ conv.numero }}">
+            <button type="submit" class="btn-finalizar">🔴 Finalizar conversación</button>
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="sin-pendientes">No hay conversaciones pendientes de atención en este momento.</p>
+{% endif %}
+
+<!-- SECCIÓN 2: SOLICITUDES DE LLAMADA -->
+<h2>Solicitudes de llamada pendientes</h2>
+{% if llamadas_pendientes %}
+    {% for llamada in llamadas_pendientes %}
+    <div class="panel panel-llamada">
+        <div class="numero">📱 {{ llamada.numero }}</div>
+        <div class="nombre">👤 {{ llamada.nombre or 'Sin nombre' }}</div>
+        <div class="desde">Solicitó llamada el: {{ llamada.creada_en.strftime('%d/%m/%Y a las %H:%M') }}</div>
+        <div class="acciones">
+            <form action="/llamada_hecha" method="POST"
+                  onsubmit="return confirm('¿Ya se realizó la llamada? Se le enviará un mensaje de agradecimiento al paciente.');">
+                <input type="hidden" name="llamada_id" value="{{ llamada.id }}">
+                <button type="submit" class="btn-llamada-hecha">✅ Llamada hecha</button>
+            </form>
+            <form action="/quitar_llamada" method="POST"
+                  onsubmit="return confirm('¿Quitar esta solicitud sin enviar ningún mensaje? Útil si ya se resolvió por chat o si no aplica.');">
+                <input type="hidden" name="llamada_id" value="{{ llamada.id }}">
+                <button type="submit" class="btn-quitar-llamada">🗑️ Quitar</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="sin-pendientes">No hay solicitudes de llamada pendientes.</p>
+{% endif %}
+
+<!-- SECCIÓN 3: CITAS PENDIENTES -->
 <h2>Solicitudes de cita pendientes</h2>
 {% if citas_pendientes %}
     {% for cita in citas_pendientes %}
@@ -322,7 +374,7 @@
     <p class="sin-pendientes">No hay solicitudes de cita pendientes.</p>
 {% endif %}
 
-<!-- SECCIÓN 2: CITAS CONFIRMADAS -->
+<!-- SECCIÓN 4: CITAS CONFIRMADAS -->
 <h2>Citas confirmadas</h2>
 {% if citas_confirmadas %}
     {% for cita in citas_confirmadas %}
@@ -354,58 +406,6 @@
     {% endfor %}
 {% else %}
     <p class="sin-pendientes">No hay citas confirmadas activas.</p>
-{% endif %}
-
-<!-- SECCIÓN 3: SOLICITUDES DE LLAMADA -->
-<h2>Solicitudes de llamada pendientes</h2>
-{% if llamadas_pendientes %}
-    {% for llamada in llamadas_pendientes %}
-    <div class="panel panel-llamada">
-        <div class="numero">📱 {{ llamada.numero }}</div>
-        <div class="nombre">👤 {{ llamada.nombre or 'Sin nombre' }}</div>
-        <div class="desde">Solicitó llamada el: {{ llamada.creada_en.strftime('%d/%m/%Y a las %H:%M') }}</div>
-        <div class="acciones">
-            <form action="/llamada_hecha" method="POST"
-                  onsubmit="return confirm('¿Ya se realizó la llamada? Se le enviará un mensaje de agradecimiento al paciente.');">
-                <input type="hidden" name="llamada_id" value="{{ llamada.id }}">
-                <button type="submit" class="btn-llamada-hecha">✅ Llamada hecha</button>
-            </form>
-            <form action="/quitar_llamada" method="POST"
-                  onsubmit="return confirm('¿Quitar esta solicitud sin enviar ningún mensaje? Útil si ya se resolvió por chat o si no aplica.');">
-                <input type="hidden" name="llamada_id" value="{{ llamada.id }}">
-                <button type="submit" class="btn-quitar-llamada">🗑️ Quitar</button>
-            </form>
-        </div>
-    </div>
-    {% endfor %}
-{% else %}
-    <p class="sin-pendientes">No hay solicitudes de llamada pendientes.</p>
-{% endif %}
-
-<!-- SECCIÓN 4: CONVERSACIONES DE AYUDA PERSONALIZADA -->
-<h2>Conversaciones esperando atención humana</h2>
-{% if conversaciones_activas %}
-    {% for conv in conversaciones_activas %}
-    <div class="panel panel-atencion">
-        <div class="numero">📱 {{ conv.numero }}</div>
-        <div class="nombre">👤 {{ conv.nombre or 'Sin nombre' }}</div>
-        <div class="desde">Esperando desde: {{ conv.desde }}</div>
-        <form action="/responder" method="POST"
-              onsubmit="return confirm('¿Enviar esta respuesta al paciente?');">
-            <input type="hidden" name="numero" value="{{ conv.numero }}">
-            <textarea name="mensaje" placeholder="Escribe tu respuesta aquí..." required></textarea>
-            <br>
-            <button type="submit" class="btn-enviar">📤 Enviar respuesta</button>
-        </form>
-        <form action="/finalizar" method="POST"
-              onsubmit="return confirm('¿Finalizar esta conversación?');">
-            <input type="hidden" name="numero" value="{{ conv.numero }}">
-            <button type="submit" class="btn-finalizar">🔴 Finalizar conversación</button>
-        </form>
-    </div>
-    {% endfor %}
-{% else %}
-    <p class="sin-pendientes">No hay conversaciones pendientes de atención en este momento.</p>
 {% endif %}
 
 <!-- SECCIÓN 5: SOLICITUDES DE MÉDICOS REFERIDOS -->
