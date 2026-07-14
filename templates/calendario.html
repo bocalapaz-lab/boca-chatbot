@@ -53,9 +53,6 @@
         .celda-especialista-ruben { background: var(--esp-ruben); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
         .celda-especialista-gaby { background: var(--esp-gaby); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
         .celda-sin-especialista { background: var(--esp-sin); color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; }
-        .celda-asistio { background: #2e7d32; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; opacity: 0.55; }
-        .celda-no-asistio { background: #757575; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; opacity: 0.55; }
-        .celda-cancelada { background: #c62828; color: white; border-radius: 6px; padding: 3px; margin-bottom: 3px; position: relative; opacity: 0.55; }
         .btn-borrar-registro { position: absolute; top: 1px; right: 2px; background: none; border: none; color: white; opacity: 0.7; font-size: 11px; cursor: pointer; padding: 0 2px; margin: 0; }
         .btn-borrar-registro:hover { opacity: 1; }
         .form-borrar { display: inline; margin: 0; padding: 0; }
@@ -67,9 +64,6 @@
         .cuadro-yacxy { background: var(--esp-yacxy); }
         .cuadro-ruben { background: var(--esp-ruben); }
         .cuadro-gaby { background: var(--esp-gaby); }
-        .cuadro-asistio { background: #2e7d32; opacity: 0.55; }
-        .cuadro-no-asistio { background: #757575; opacity: 0.55; }
-        .cuadro-cancelada { background: #c62828; opacity: 0.55; }
     </style>
 </head>
 <body>
@@ -103,43 +97,27 @@
             {% if citas_celda %}
                 {% for item in citas_celda %}
                     {% set cita = item.obj %}
-                    {% if cita.estado == 'confirmada' %}
-                        <div class="{{ 'celda-especialista-' ~ cita.especialista if cita.especialista else 'celda-sin-especialista' }}">
-                            <span class="celda-nombre">BOCA · {{ cita.nombre or 'Sin nombre' }}</span>
-                            <span class="celda-subtexto">{{ especialistas.get(cita.especialista, 'Sin asignar') }}</span>
-                            <span class="celda-hora">{{ cita.hora_cita }}</span>
-                        </div>
-                    {% elif cita.estado == 'asistio' %}
-                        <div class="celda-asistio">
+                    <div class="{{ 'celda-especialista-' ~ cita.especialista if cita.especialista else 'celda-sin-especialista' }}">
+                        {% if cita.estado != 'confirmada' %}
                             <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
                                   onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
                                 <input type="hidden" name="cita_id" value="{{ cita.id }}">
                                 <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
                             </form>
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
-                            <span class="celda-hora">{{ cita.hora_cita }}</span>
-                        </div>
-                    {% elif cita.estado == 'no_asistio' %}
-                        <div class="celda-no-asistio">
-                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
-                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
-                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
-                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
-                            </form>
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
-                            <span class="celda-hora">{{ cita.hora_cita }}</span>
-                        </div>
-                    {% elif cita.estado == 'cancelada' %}
-                        <div class="celda-cancelada">
-                            <form method="POST" action="/eliminar_registro_cita" class="form-borrar"
-                                  onsubmit="return confirm('¿Eliminar este registro por completo? Esto no envía ningún mensaje al paciente, solo limpia el calendario. Úsalo solo para registros de prueba o errores.');">
-                                <input type="hidden" name="cita_id" value="{{ cita.id }}">
-                                <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
-                            </form>
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }}</span>
-                            <span class="celda-hora">{{ cita.hora_cita }}</span>
-                        </div>
-                    {% endif %}
+                        {% endif %}
+                        {% if cita.estado == 'confirmada' %}
+                            <span class="celda-nombre">BOCA</span>
+                            <span class="celda-subtexto">Paciente: {{ cita.nombre or 'Sin nombre' }}</span>
+                            <span class="celda-subtexto">Atiende: {{ especialistas.get(cita.especialista, 'Sin asignar') }}</span>
+                        {% elif cita.estado == 'asistio' %}
+                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }} — ASISTIÓ</span>
+                        {% elif cita.estado == 'no_asistio' %}
+                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }} — NO ASISTIÓ</span>
+                        {% elif cita.estado == 'cancelada' %}
+                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }} — CANCELÓ</span>
+                        {% endif %}
+                        <span class="celda-hora">{{ cita.hora_cita }}</span>
+                    </div>
                 {% endfor %}
             {% endif %}
 
@@ -178,13 +156,9 @@
     <span class="cuadro-ruben"></span> Rubén
     &nbsp;&nbsp;&nbsp;
     <span class="cuadro-gaby"></span> Gaby
-    &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-asistio"></span> Paciente atendido (color tenue, ya pasó)
-    &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-no-asistio"></span> Paciente no asistió (color tenue, ya pasó)
-    &nbsp;&nbsp;&nbsp;
-    <span class="cuadro-cancelada"></span> Cita cancelada (color tenue, ya pasó)
     <br><br>
+    <em>El color de cada casilla siempre indica el especialista que atiende, sin importar el estado de la cita. Cuando una cita ya pasó, el texto cambia a "ASISTIÓ", "NO ASISTIÓ" o "CANCELÓ" (el color se mantiene igual).</em>
+    <br>
     <em>Si dos o más pacientes coinciden en la misma hora y día (por ejemplo, con distintos especialistas), todas sus citas se muestran apiladas dentro de la misma casilla.</em>
 </div>
 
