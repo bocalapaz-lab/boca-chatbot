@@ -449,6 +449,8 @@ def verificar_token(req):
 def manejar_palabra_clave_doctor(numero, numero_normalizado):
     """
     Un doctor que refiere pacientes escribió la palabra clave secreta.
+    En vez de crear la solicitud de inmediato, primero se le pide su
+    nombre, para que aparezca junto a su número en el panel.
     Si ya tiene una solicitud pendiente de autorizacion, no se crea otra
     (evita duplicados si la escribe varias veces por error o impaciencia).
     """
@@ -461,14 +463,8 @@ def manejar_palabra_clave_doctor(numero, numero_normalizado):
         enviar_ya_tiene_solicitud_doctor(numero)
         return
 
-    nueva_solicitud = CitaDoctor(
-        doctor_numero=numero_normalizado,
-        estado="pendiente_autorizacion"
-    )
-    db.session.add(nueva_solicitud)
-    db.session.commit()
-    agregar_mensajes_log(f"SOLICITUD DE MEDICO REFERIDO -> {numero_normalizado}")
-    enviar_solicitud_doctor_recibida(numero)
+    guardar_estado(numero_normalizado, "esperando_nombre_doctor")
+    enviar_pedir_nombre_doctor(numero)
 
 def recibir_mensajes(req):
     try:
@@ -549,7 +545,21 @@ def recibir_mensajes(req):
                 enviar_solicitud_llamada_recibida(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
-            if estado in ("esperando_nombre_cita", "esperando_nombre_atencion", "esperando_nombre_llamada") and tipo != "text":
+            if estado == "esperando_nombre_doctor" and tipo == "text":
+                nombre = mensaje["text"]["body"].strip()
+                nueva_solicitud = CitaDoctor(
+                    doctor_numero=numero_normalizado,
+                    doctor_nombre=nombre,
+                    estado="pendiente_autorizacion"
+                )
+                db.session.add(nueva_solicitud)
+                db.session.commit()
+                borrar_estado(numero_normalizado)
+                agregar_mensajes_log(f"SOLICITUD DE MEDICO REFERIDO -> {numero_normalizado} | Nombre: {nombre}")
+                enviar_solicitud_doctor_recibida(numero)
+                return jsonify({'message': 'EVENT_RECEIVED'}), 200
+
+            if estado in ("esperando_nombre_cita", "esperando_nombre_atencion", "esperando_nombre_llamada", "esperando_nombre_doctor") and tipo != "text":
                 enviar_pedir_nombre_como_texto(numero)
                 return jsonify({'message': 'EVENT_RECEIVED'}), 200
 
@@ -1276,6 +1286,23 @@ def enviar_pedir_nombre_llamada(number):
             "body": (
                 "📞 *Solicitar llamada*\n\n"
                 "Para registrar tu solicitud, por favor "
+                "escríbenos tu nombre completo. 😊"
+            )
+        }
+    }
+    enviar_payload(data)
+
+def enviar_pedir_nombre_doctor(number):
+    number = normalizar_numero_mx(number)
+    data = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": number,
+        "type": "text",
+        "text": {
+            "preview_url": False,
+            "body": (
+                "👋 Para continuar con tu solicitud, por favor "
                 "escríbenos tu nombre completo. 😊"
             )
         }
