@@ -105,17 +105,9 @@
                                 <button type="submit" class="btn-borrar-registro" title="Eliminar registro">✕</button>
                             </form>
                         {% endif %}
-                        {% if cita.estado == 'confirmada' %}
-                            <span class="celda-nombre">BOCA</span>
-                            <span class="celda-subtexto">Paciente: {{ cita.nombre or 'Sin nombre' }}</span>
-                            <span class="celda-subtexto">Atiende: {{ especialistas.get(cita.especialista, 'Sin asignar') }}</span>
-                        {% elif cita.estado == 'asistio' %}
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }} — ASISTIÓ</span>
-                        {% elif cita.estado == 'no_asistio' %}
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }} — NO ASISTIÓ</span>
-                        {% elif cita.estado == 'cancelada' %}
-                            <span class="celda-nombre">{{ cita.nombre or 'Sin nombre' }} — CANCELÓ</span>
-                        {% endif %}
+                        <span class="celda-nombre">BOCA</span>
+                        <span class="celda-subtexto">Paciente: {{ cita.nombre or 'Sin nombre' }}</span>
+                        <span class="celda-subtexto">Atiende: {{ especialistas.get(cita.especialista, 'Sin asignar') }}</span>
                         <span class="celda-hora">{{ cita.hora_cita }}</span>
                     </div>
                 {% endfor %}
@@ -157,7 +149,7 @@
     &nbsp;&nbsp;&nbsp;
     <span class="cuadro-gaby"></span> Gaby
     <br><br>
-    <em>El color de cada casilla siempre indica el especialista que atiende, sin importar el estado de la cita. Cuando una cita ya pasó, el texto cambia a "ASISTIÓ", "NO ASISTIÓ" o "CANCELÓ" (el color se mantiene igual).</em>
+    <em>El color de cada casilla siempre indica el especialista que atiende. Marcar una cita como "Asistió", "No vino" o "Cancelar cita" no cambia su texto ni su color aquí — solo envía el mensaje correspondiente al paciente y habilita el botón de eliminar (✕) para quitarla del calendario cuando quieras.</em>
     <br>
     <em>Si dos o más pacientes coinciden en la misma hora y día (por ejemplo, con distintos especialistas), todas sus citas se muestran apiladas dentro de la misma casilla.</em>
 </div>
