@@ -398,22 +398,6 @@ def crear_evento_calendar_doctor(cita_doctor):
         agregar_mensajes_log(f"Error Google Calendar (crear evento medico referido): {str(e)}", tecnico=True)
         return None
 
-def actualizar_titulo_evento_calendar(google_event_id, nuevo_titulo):
-    if not google_event_id:
-        return
-    servicio = obtener_servicio_calendar()
-    if not servicio:
-        return
-    try:
-        servicio.events().patch(
-            calendarId=GOOGLE_CALENDAR_ID,
-            eventId=google_event_id,
-            body={'summary': nuevo_titulo}
-        ).execute()
-        agregar_mensajes_log(f"CALENDAR: titulo actualizado -> {google_event_id}")
-    except Exception as e:
-        agregar_mensajes_log(f"Error Google Calendar (actualizar titulo): {str(e)}", tecnico=True)
-
 def eliminar_evento_calendar(google_event_id):
     if not google_event_id:
         return
@@ -885,7 +869,6 @@ def cancelar_cita_admin():
         numero = cita.numero
         cita.estado = "cancelada"
         db.session.commit()
-        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — CANCELÓ")
         agregar_mensajes_log(f"CITA CANCELADA POR ADMIN -> {numero} | {nombre} | Cita del {info}")
 
         mensaje_cancelacion = (
@@ -922,7 +905,6 @@ def marcar_asistio():
         nombre = cita.nombre or "paciente"
         cita.estado = "asistio"
         db.session.commit()
-        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — ASISTIÓ")
         agregar_mensajes_log(f"CITA ASISTIDA -> {numero} | {nombre} | {cita.fecha_cita} a las {cita.hora_cita}")
 
         mensaje_gracias = (
@@ -958,7 +940,6 @@ def marcar_no_asistio():
         info = f"{cita.fecha_cita} a las {cita.hora_cita}"
         cita.estado = "no_asistio"
         db.session.commit()
-        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — NO ASISTIÓ")
         agregar_mensajes_log(f"CITA NO ASISTIDA -> {numero} | {nombre} | Cita del {info}")
 
         mensaje_no_asistio = (
@@ -1561,7 +1542,6 @@ def confirmar_cancelacion(number, numero_normalizado):
         nombre = cita.nombre or "paciente"
         cita.estado = "cancelada"
         db.session.commit()
-        actualizar_titulo_evento_calendar(cita.google_event_id, f"{nombre} — CANCELÓ")
         agregar_mensajes_log(f"CITA CANCELADA -> {numero_normalizado} | {nombre} | Cita del {info}")
 
         data = {
